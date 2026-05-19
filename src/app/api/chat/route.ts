@@ -3,72 +3,94 @@ import { streamText, convertToCoreMessages } from 'ai';
 import { SYSTEM_PROMPT } from '../../../agents/realEstateExecutive.js';
 import { searchPropertiesInSupabase } from '../../../tools/supabaseTools.js';
 import { createClientFolder } from '../../../tools/googleDriveTools.js';
+import { sendCrmLeadNotification, triggerCmsPropertyPublish } from '../../../tools/webhookTools.js';
 
-// Forzamos la ejecución dinámica en el servidor
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
   try {
     const { messages } = await req.json();
 
-    // Arrancamos el stream de texto con GPT-4o o tu modelo preferido
     const result = await streamText({
       model: openai('gpt-4o'),
       system: SYSTEM_PROMPT,
       messages: convertToCoreMessages(messages),
-      // Inyectamos el arsenal de herramientas (Tools) que el agente puede usar de forma autónoma
+      // El arsenal completo de herramientas del agente de élite
       tools: {
         buscarPropiedades: {
-          description: 'Consulta el inventario de propiedades disponibles en Supabase filtrando por ubicación, presupuesto máximo y estilo de vida.',
+          description: 'Consulta el inventario disponible en Supabase filtrando por ubicación, presupuesto máximo y estilo de vida.',
           parameters: {
             type: 'object',
             properties: {
-              zona: { 
-                type: 'string', 
-                description: 'La ubicación en Marbella (ej: La Zagaleta, Sierra Blanca, Nueva Andalucía, Elviria).' 
-              },
-              precioMax: { 
-                type: 'number', 
-                description: 'Presupuesto máximo del inversor en euros.' 
-              },
-              estilo: { 
-                type: 'string', 
-                description: 'Estilo arquitectónico o tags de ambiente (ej: minimalista, vistas al mar, privacidad, clásica).' 
-              }
+              zona: { type: 'string', description: 'Ubicación en Marbella (ej: La Zagaleta, Sierra Blanca, Nueva Andalucía).' },
+              precioMax: { type: 'number', description: 'Presupuesto máximo en euros.' },
+              estilo: { type: 'string', description: 'Estilo arquitectónico o tags de ambiente (ej: minimalista, vistas al mar).' }
             }
           },
           execute: async ({ zona, precioMax, estilo }) => {
-            console.log(`[Agente Core] Ejecutando búsqueda en Supabase -> Zona: ${zona}, Precio Máx: ${precioMax}, Estilo: ${estilo}`);
+            console.log(`[Core] Tool Buscar: ${zona}, ${precioMax}, ${estilo}`);
             return await searchPropertiesInSupabase({ zona, precioMax, estilo });
           }
         },
         crearCarpetaCliente: {
-          description: 'Crea una carpeta de seguridad en Google Drive para almacenar de forma confidencial el KYC, pasaporte o firmas de NDA de un inversor cualificado.',
+          description: 'Crea un espacio seguro en Google Drive para guardar el KYC, pasaporte o NDA de un inversor cualificado.',
           parameters: {
             type: 'object',
             properties: {
-              nombreCliente: { 
-                type: 'string', 
-                description: 'Nombre completo del cliente o razón social del fondo inversor.' 
-              }
+              nombreCliente: { type: 'string', description: 'Nombre completo del inversor o fondo.' }
             },
             required: ['nombreCliente']
           },
           execute: async ({ nombreCliente }) => {
-            console.log(`[Agente Core] Solicitando espacio seguro en Drive para: ${nombreCliente}`);
+            console.log(`[Core] Tool Drive: ${nombreCliente}`);
             return await createClientFolder(nombreCliente);
+          }
+        },
+        notificarLeadCRM: {
+          description: 'Sincroniza un perfil de inversor cualificado orgánicamente enviando sus datos esenciales al CRM corporativo.',
+          parameters: {
+            type: 'object',
+            properties: {
+              nombre: { type: 'string', description: 'Nombre completo del lead.' },
+              contacto: { type: 'string', description: 'Número de WhatsApp, teléfono o email.' },
+              presupuesto: { type: 'number', description: 'Presupuesto máximo detectado.' },
+              estiloBuscado: { type: 'string', description: 'Preferencias de diseño o lifestyle.' },
+              notasCualificacion: { type: 'string', description: 'Resumen cualitativo de la conversación y urgencia del cliente.' }
+            },
+            required: ['nombre', 'contacto', 'notasCualificacion']
+          },
+          execute: async (leadData) => {
+            console.log(`[Core] Tool CRM: Enviando lead ${leadData.nombre}`);
+            return await sendCrmLeadNotification(leadData);
+          }
+        },
+        publicarPropiedadCMS: {
+          description: 'Inyecta el copywriting emocional y la ficha técnica de una propiedad directamente en el CMS de la web para su publicación.',
+          parameters: {
+            type: 'object',
+            properties: {
+              titulo: { type: 'string', description: 'Título comercial de la propiedad de lujo.' },
+              ubicacion: { type: 'string', description: 'Dirección o zona exacta en Marbella.' },
+              precio: { type: 'number', description: 'Precio de salida al mercado en euros.' },
+              copywritingEmocional: { type: 'string', description: 'Narrativa persuasiva centrada en la luz, los materiales y la exclusividad.' },
+              tagsLifestyle: { type: 'array', items: { type: 'string' }, description: 'Tags de estilo de vida.' }
+            },
+            required: ['titulo', 'ubicacion', 'precio', 'copywritingEmocional']
+          },
+          execute: async (propertyData) => {
+            console.log(`[Core] Tool CMS: Publicando propiedad ${propertyData.titulo}`);
+            return await triggerCmsPropertyPublish(propertyData);
           }
         }
       }
     });
 
-    // Retornamos el stream compatible con tu frontend o middleware de WhatsApp
     return result.toDataStreamResponse();
 
   } catch (error) {
     console.error('Error crítico en el core del agente:', error);
     return new Response(
-      JSON.stringify({ error: 'Hubo un problema al procesar la solicitud en el core del agente.' }), 
+      JSON.stringify({ error: 'Hubo un problema en el orquestador del agente.' }), 
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     );
   }
