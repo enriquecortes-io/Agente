@@ -4,8 +4,8 @@ import dotenv from 'dotenv';
 dotenv.config({ path: '.env.local' });
 
 // Usamos valores por defecto por si el .env.local aún no tiene las credenciales reales
-const supabaseUrl = process.env.SUPABASE_URL || 'https://tu-proyecto.supabase.co';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'tu-key';
+const supabaseUrl = process.env.SUPABASE_URL || 'https://sqdvkfcghdjxtyuybxpy.supabase.co/';
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'sb_publishable_LIaG8wb4ciGYSVkUAI8UeQ_wj3BVR4j';
 
 export const supabase = createClient(supabaseUrl, supabaseKey);
 
