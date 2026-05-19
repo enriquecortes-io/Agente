@@ -1,0 +1,33 @@
+{
+  "name": "agente",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/enriquecortes-io/Agente.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/enriquecortes-io/Agente/issues"
+  },
+  "homepage": "https://github.com/enriquecortes-io/Agente#readme",
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "tsx": "^4.22.3",
+    "typescript": "^6.0.3"
+  },
+  "dependencies": {
+    "@ai-sdk/openai": "^3.0.64",
+    "@supabase/supabase-js": "^2.106.0",
+    "ai": "^6.0.185",
+    "dotenv": "^17.4.2",
+    "googleapis": "^171.4.0"
+  }
+}
