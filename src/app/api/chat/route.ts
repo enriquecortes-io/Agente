@@ -1,4 +1,4 @@
-import { openai } from '@ai-sdk/google';
+import { google } from '@ai-sdk/google';
 import { streamText, convertToCoreMessages } from 'ai';
 import { SYSTEM_PROMPT } from '../../../agents/realEstateExecutive.js';
 import { searchPropertiesInSupabase } from '../../../tools/supabaseTools.js';

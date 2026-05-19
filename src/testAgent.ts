@@ -1,5 +1,5 @@
 import { generateText } from 'ai';
-import { openai } from '@ai-sdk/google';
+import { google } from '@ai-sdk/google';
 import { SYSTEM_PROMPT } from './agents/realEstateExecutive.js';
 import { searchPropertiesInSupabase } from './tools/supabaseTools.js';
 import { createClientFolder } from './tools/googleDriveTools.js';
