@@ -12,7 +12,7 @@ export async function POST(req: Request) {
     const { messages } = await req.json();
 
     const result = await streamText({
-      model: google('gemini-2.5-pro'),
+      model: google('gemini-2.5-flash'),
       system: SYSTEM_PROMPT,
       messages: convertToCoreMessages(messages),
       // El arsenal completo de herramientas del agente de élite
