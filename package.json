@@ -28,6 +28,7 @@
     "@supabase/supabase-js": "^2.106.0",
     "ai": "^6.0.185",
     "dotenv": "^17.4.2",
-    "googleapis": "^171.4.0"
+    "googleapis": "^171.4.0",
+    "zod": "^4.4.3"
   }
 }
