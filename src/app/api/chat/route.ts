@@ -1,4 +1,4 @@
-import { openai } from '@ai-sdk/openai';
+import { openai } from '@ai-sdk/google';
 import { streamText, convertToCoreMessages } from 'ai';
 import { SYSTEM_PROMPT } from '../../../agents/realEstateExecutive.js';
 import { searchPropertiesInSupabase } from '../../../tools/supabaseTools.js';
@@ -12,7 +12,7 @@ export async function POST(req: Request) {
     const { messages } = await req.json();
 
     const result = await streamText({
-      model: openai('gpt-4o'),
+      model: google('gemini-1.5-pro'),
       system: SYSTEM_PROMPT,
       messages: convertToCoreMessages(messages),
       // El arsenal completo de herramientas del agente de élite

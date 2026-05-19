@@ -1,5 +1,5 @@
 import { generateText } from 'ai';
-import { openai } from '@ai-sdk/openai';
+import { openai } from '@ai-sdk/google';
 import { SYSTEM_PROMPT } from './agents/realEstateExecutive.js';
 import { searchPropertiesInSupabase } from './tools/supabaseTools.js';
 import { createClientFolder } from './tools/googleDriveTools.js';
@@ -9,8 +9,8 @@ import dotenv from 'dotenv';
 // Cargar variables de entorno
 dotenv.config({ path: '.env.local' });
 
-if (!process.env.OPENAI_API_KEY) {
-  console.error('\n❌ ERROR: No se ha encontrado OPENAI_API_KEY en el archivo .env.local');
+if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
+  console.error('\n❌ ERROR: No se ha encontrado GOOGLE_GENERATIVE_AI_API_KEY en el archivo .env.local');
   console.error('Por favor, asegúrate de añadir tus credenciales antes de ejecutar el test.\n');
   process.exit(1);
 }
@@ -90,7 +90,7 @@ async function simularConversacion(mensajeCliente: string) {
 
   try {
     const response = await generateText({
-      model: openai('gpt-4o'),
+      model: google('gemini-1.5-pro'),
       system: SYSTEM_PROMPT,
       prompt: mensajeCliente,
       tools: tools,

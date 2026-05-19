@@ -24,7 +24,7 @@
     "typescript": "^6.0.3"
   },
   "dependencies": {
-    "@ai-sdk/openai": "^3.0.64",
+    "@ai-sdk/google": "^3.0.75",
     "@supabase/supabase-js": "^2.106.0",
     "ai": "^6.0.185",
     "dotenv": "^17.4.2",
