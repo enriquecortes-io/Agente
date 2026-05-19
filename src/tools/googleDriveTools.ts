@@ -6,9 +6,8 @@ dotenv.config({ path: '.env.local' });
 // Autenticación con Google Cloud (Service Account)
 const auth = new google.auth.GoogleAuth({
   credentials: {
-    client_email: process.env.GOOGLE_CLIENT_EMAIL,
-    // El replace soluciona problemas comunes de formato con las claves privadas en los .env
-    private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+    client_email: process.env.GOOGLE_CLIENT_EMAIL!,
+    private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n') || '',
   },
   scopes: ['https://www.googleapis.com/auth/drive.file'],
 });
@@ -20,16 +19,14 @@ export async function createClientFolder(clientName: string) {
     const fileMetadata = {
       name: `${clientName} - KYC & NDA`,
       mimeType: 'application/vnd.google-apps.folder',
-      // Opcional: Aquí puedes poner el ID de la carpeta maestra "The Edit Marbella - Clients"
-      // parents: [process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID!] 
     };
 
     const folder = await drive.files.create({
       requestBody: fileMetadata,
-      fields: 'id, webViewLink', // Pedimos que nos devuelva el ID y el enlace para compartir
+      fields: 'id, webViewLink',
     });
 
-    console.log(`[Drive Tool] Carpeta creada con éxito para ${clientName}`);
+    console.log(`[Drive Tool] Carpeta segura creada para ${clientName}`);
     
     return { 
       success: true, 
