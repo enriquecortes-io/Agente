@@ -90,7 +90,7 @@ async function simularConversacion(mensajeCliente: string) {
 
   try {
     const response = await generateText({
-      model: google('gemini-1.5-flash'),
+      model: google('gemini-2.5-pro'),
       system: SYSTEM_PROMPT,
       prompt: mensajeCliente,
       tools: tools,
