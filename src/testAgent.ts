@@ -10,26 +10,35 @@ dotenv.config({ path: '.env.local' });
 
 const tools = {
   buscarPropiedades: tool({
-    description: 'Busca propiedades en la base de datos de Supabase. NO la uses sin rellenar los parámetros.',
-    // Hacemos los campos super estrictos
+    description: 'BÚSQUEDA OBLIGATORIA: Usa esta herramienta SIEMPRE que el cliente pregunte por propiedades, presupuesto o zonas.',
     parameters: z.object({
-      zona: z.string().min(1).describe('La zona obligatoria (ej: La Zagaleta)'),
-      precioMax: z.number().positive().describe('Presupuesto máximo en euros (ej: 7000000)')
+      zona: z.string().optional().describe('Zona extraída (ej: La Zagaleta)'),
+      precioMax: z.number().optional().describe('Presupuesto máximo (ej: 7000000)')
     }),
     execute: async (args) => {
+      // Trampa anti-vagos
+      if (!args.zona && !args.precioMax) {
+        return { error: "ERROR INTERNO: Harvis, no has extraído ni la zona ni el precio. Vuelve a leer el mensaje del cliente y usa la herramienta correctamente." };
+      }
       console.log(`\n    🔌 [TOOL SUPABASE] Datos extraídos por Harvis:`, args);
       return await searchPropertiesInSupabase(args);
     }
   }),
   crearCarpetaCliente: tool({
-    description: 'Crea una carpeta en Google Drive para el cliente. REQUIERE NOMBRE DEL CLIENTE.',
+    description: 'CREACIÓN DE CARPETA: Úsala cuando el cliente envíe su nombre o pida firmar un NDA/KYC.',
     parameters: z.object({
-      nombreCliente: z.string().min(2).describe('Nombre del cliente (ej: Charles Vance)'),
-      tipoInteraccion: z.string().min(2).describe('Clasificación (ej: NDA, Off-Market)')
+      nombreCliente: z.string().optional().describe('Nombre del cliente (ej: Charles Vance)'),
+      tipoInteraccion: z.string().optional().describe('Tipo (ej: NDA, Off-Market)')
     }),
     execute: async (args) => {
-      console.log(`\n    🔌 [TOOL DRIVE] Harvis organizando -> Cliente: ${args.nombreCliente} | Interacción: ${args.tipoInteraccion}`);
-      const resultado = await createClientFolder(args.nombreCliente, args.tipoInteraccion);
+      // Trampa anti-vagos
+      if (!args.nombreCliente || args.nombreCliente === 'undefined') {
+        return { error: "ERROR INTERNO: Harvis, es IMPRESCINDIBLE que extraigas el nombre del cliente del texto (ej: Charles Vance) para crear la carpeta. ¡Inténtalo de nuevo!" };
+      }
+      
+      const interaccion = args.tipoInteraccion || 'General';
+      console.log(`\n    🔌 [TOOL DRIVE] Harvis organizando -> Cliente: ${args.nombreCliente} | Interacción: ${interaccion}`);
+      const resultado = await createClientFolder(args.nombreCliente, interaccion);
       console.log(`    ✅ [TOOL DRIVE] Respuesta de Google:`, resultado.message || resultado.error);
       return resultado;
     }
@@ -48,16 +57,15 @@ async function hablarConHarvis(mensajeCliente: string) {
   try {
     const response = await generateText({
       model: google('gemini-2.5-flash'),
-      // Le gritamos un poco en el prompt de sistema para que no sea vago
-      system: SYSTEM_PROMPT + "\n\nINSTRUCCIÓN CRÍTICA: CUANDO USES UNA HERRAMIENTA, DEBES EXTRAER LOS DATOS DEL MENSAJE DEL USUARIO Y RELLENAR TODOS LOS PARÁMETROS. NUNCA ENVÍES PARÁMETROS VACÍOS.",
+      system: SYSTEM_PROMPT + "\n\nINSTRUCCIÓN CRÍTICA: SIEMPRE debes intentar extraer la información del cliente para usar las herramientas. Si usas una herramienta, EXPLÍCALE al cliente el resultado después.",
       messages: historialChat,
       tools: tools,
-      maxSteps: 5
+      maxSteps: 5 // Esto le da a Harvis hasta 5 intentos internos si cae en nuestra trampa
     });
 
     console.log(`\n🤖 AGENTE HARVIS:`);
     console.log(`─────────────────────────────────────────────────────────────────────────`);
-    console.log(response.text || "(Esperando...)");
+    console.log(response.text || "(Respuesta vacía)");
     console.log(`─────────────────────────────────────────────────────────────────────────\n`);
 
     if (response.messages) {
