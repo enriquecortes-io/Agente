@@ -10,10 +10,11 @@ dotenv.config({ path: '.env.local' });
 
 const tools = {
   buscarPropiedades: tool({
-    description: 'Busca propiedades en la base de datos. ES OBLIGATORIO extraer zona y precio.',
+    description: 'Busca propiedades en la base de datos de Supabase. NO la uses sin rellenar los parámetros.',
+    // Hacemos los campos super estrictos
     parameters: z.object({
-      zona: z.string().describe('La zona mencionada (ej: La Zagaleta, Sierra Blanca).'),
-      precioMax: z.number().describe('Presupuesto máximo en euros, solo números.')
+      zona: z.string().min(1).describe('La zona obligatoria (ej: La Zagaleta)'),
+      precioMax: z.number().positive().describe('Presupuesto máximo en euros (ej: 7000000)')
     }),
     execute: async (args) => {
       console.log(`\n    🔌 [TOOL SUPABASE] Datos extraídos por Harvis:`, args);
@@ -21,15 +22,15 @@ const tools = {
     }
   }),
   crearCarpetaCliente: tool({
-    description: 'Crea una estructura de carpetas organizada en Drive. ES OBLIGATORIO extraer el cliente y clasificar la interacción.',
+    description: 'Crea una carpeta en Google Drive para el cliente. REQUIERE NOMBRE DEL CLIENTE.',
     parameters: z.object({
-      nombreCliente: z.string().describe('Nombre del cliente (ej: Charles Vance).'),
-      tipoInteraccion: z.string().describe('Clasificación del documento o gestión (ej: NDA y KYC, Prueba de Fondos, Contrato de Arras, Propuestas Off-Market).')
+      nombreCliente: z.string().min(2).describe('Nombre del cliente (ej: Charles Vance)'),
+      tipoInteraccion: z.string().min(2).describe('Clasificación (ej: NDA, Off-Market)')
     }),
     execute: async (args) => {
       console.log(`\n    🔌 [TOOL DRIVE] Harvis organizando -> Cliente: ${args.nombreCliente} | Interacción: ${args.tipoInteraccion}`);
       const resultado = await createClientFolder(args.nombreCliente, args.tipoInteraccion);
-      console.log(`    ✅ [TOOL DRIVE] Respuesta de Google:`, resultado.message);
+      console.log(`    ✅ [TOOL DRIVE] Respuesta de Google:`, resultado.message || resultado.error);
       return resultado;
     }
   })
@@ -47,7 +48,8 @@ async function hablarConHarvis(mensajeCliente: string) {
   try {
     const response = await generateText({
       model: google('gemini-2.5-flash'),
-      system: SYSTEM_PROMPT + "\n\nREGLA DE ORO: Después de usar cualquier herramienta, SIEMPRE debes responder al cliente resumiendo lo que has hecho y facilitándole los enlaces.",
+      // Le gritamos un poco en el prompt de sistema para que no sea vago
+      system: SYSTEM_PROMPT + "\n\nINSTRUCCIÓN CRÍTICA: CUANDO USES UNA HERRAMIENTA, DEBES EXTRAER LOS DATOS DEL MENSAJE DEL USUARIO Y RELLENAR TODOS LOS PARÁMETROS. NUNCA ENVÍES PARÁMETROS VACÍOS.",
       messages: historialChat,
       tools: tools,
       maxSteps: 5
@@ -55,7 +57,7 @@ async function hablarConHarvis(mensajeCliente: string) {
 
     console.log(`\n🤖 AGENTE HARVIS:`);
     console.log(`─────────────────────────────────────────────────────────────────────────`);
-    console.log(response.text || "(Harvis sigue procesando...)");
+    console.log(response.text || "(Esperando...)");
     console.log(`─────────────────────────────────────────────────────────────────────────\n`);
 
     if (response.messages) {
