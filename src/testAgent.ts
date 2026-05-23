@@ -46,11 +46,11 @@ async function hablarConHarvis(mensajeCliente: string) {
 
   try {
     const response = await generateText({
-      model: google('gemini-1.5-pro-latest'),
-      system: SYSTEM_PROMPT + "\n\nREGLA SUPREMA: Es OBLIGATORIO que uses las herramientas disponibles si el mensaje del cliente coincide con su descripción. NO te limites a responder con texto sin ejecutar la herramienta primero.",
+      model: google('gemini-2.5-flash'), // Volvemos al modelo que funciona en tu cuenta
+      system: SYSTEM_PROMPT + "\n\nREGLA SUPREMA: NUNCA envíes parámetros vacíos o 'undefined' a las herramientas. Debes extraer la información exacta del cliente.",
       messages: historialChat,
       tools: tools,
-      maxSteps: 5 // Permite que ejecute la herramienta y luego responda en el mismo paso
+      maxSteps: 5
     });
 
     console.log(`\n🤖 AGENTE HARVIS:`);
