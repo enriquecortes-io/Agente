@@ -46,7 +46,7 @@ async function hablarConHarvis(mensajeCliente: string) {
 
   try {
     const response = await generateText({
-      model: google('gemini-1.5-pro'),
+      model: google('gemini-1.5-pro-latest'),
       system: SYSTEM_PROMPT + "\n\nREGLA SUPREMA: Es OBLIGATORIO que uses las herramientas disponibles si el mensaje del cliente coincide con su descripción. NO te limites a responder con texto sin ejecutar la herramienta primero.",
       messages: historialChat,
       tools: tools,
