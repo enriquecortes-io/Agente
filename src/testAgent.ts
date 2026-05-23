@@ -10,10 +10,10 @@ dotenv.config({ path: '.env.local' });
 
 const tools = {
   buscarPropiedades: tool({
-    description: 'Busca propiedades en la base de datos. Úsala cuando el cliente pregunte por villas o ubicaciones.',
+    description: 'Busca propiedades en la base de datos. ES OBLIGATORIO rellenar los parámetros extrayéndolos de lo que dice el cliente.',
     parameters: z.object({
-      zona: z.string().describe('Ubicación en Marbella (ej: La Zagaleta, Sierra Blanca)').optional(),
-      precioMax: z.number().describe('Presupuesto máximo en euros').optional()
+      zona: z.string().describe('La zona o ubicación mencionada por el cliente (ej: La Zagaleta, Sierra Blanca).'),
+      precioMax: z.number().describe('Presupuesto máximo del cliente en euros, solo el número (ej: 7000000).')
     }),
     execute: async (args) => {
       console.log(`\n    🔌 [TOOL SUPABASE] Datos extraídos por Harvis:`, args);
@@ -21,21 +21,19 @@ const tools = {
     }
   }),
   crearCarpetaCliente: tool({
-    description: 'Crea una carpeta segura en Google Drive para el NDA o KYC del cliente.',
+    description: 'Crea una carpeta segura en Google Drive. ES OBLIGATORIO extraer el nombre del cliente.',
     parameters: z.object({
-      nombreCliente: z.string().describe('Nombre del cliente para nombrar la carpeta (ej: Charles Vance)')
+      nombreCliente: z.string().describe('Nombre completo del cliente extraído de la conversación (ej: Charles Vance).')
     }),
     execute: async (args) => {
       console.log(`\n    🔌 [TOOL DRIVE] Datos extraídos por Harvis:`, args);
-      const nombreFinal = args.nombreCliente || 'Cliente Sin Nombre';
-      const resultado = await createClientFolder(nombreFinal);
+      const resultado = await createClientFolder(args.nombreCliente);
       console.log(`    ✅ [TOOL DRIVE] Respuesta de Google:`, resultado.message);
       return resultado;
     }
   })
 };
 
-// Aquí guardaremos TODO el contexto (mensajes, llamadas a herramientas y respuestas)
 let historialChat: CoreMessage[] = [];
 
 async function hablarConHarvis(mensajeCliente: string) {
@@ -48,8 +46,7 @@ async function hablarConHarvis(mensajeCliente: string) {
   try {
     const response = await generateText({
       model: google('gemini-2.5-flash'),
-      // Le inyectamos una orden crítica al sistema para que NO se quede callado
-      system: SYSTEM_PROMPT + "\n\nREGLA CRÍTICA: SIEMPRE debes responder al cliente con texto natural después de usar una herramienta. NUNCA dejes tu respuesta en blanco.",
+      system: SYSTEM_PROMPT + "\n\nREGLA DE ORO: Después de usar cualquier herramienta, SIEMPRE debes responder al cliente resumiendo lo que has hecho.",
       messages: historialChat,
       tools: tools,
       maxSteps: 5
@@ -57,10 +54,9 @@ async function hablarConHarvis(mensajeCliente: string) {
 
     console.log(`\n🤖 AGENTE HARVIS:`);
     console.log(`─────────────────────────────────────────────────────────────────────────`);
-    console.log(response.text || "(Harvis se ha quedado pensando...)");
+    console.log(response.text || "(Esperando siguiente interacción...)");
     console.log(`─────────────────────────────────────────────────────────────────────────\n`);
 
-    // Actualizamos el historial con todo lo que ha pasado por dentro (¡la memoria real!)
     if (response.messages) {
        historialChat = response.messages;
     } else {
