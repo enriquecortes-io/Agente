@@ -47,7 +47,7 @@ async function hablarConHarvis(mensajeCliente: string) {
 
   try {
     const response = await generateText({
-      model: google('gemini-1.5-flash'),
+      model: google('gemini-1.5-flash-latest'),
       system: SYSTEM_PROMPT + "\n\nREGLA: NUNCA envíes parámetros vacíos a las herramientas. Extrae la info.",
       messages: historialChat,
       tools: tools,
