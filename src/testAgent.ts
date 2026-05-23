@@ -10,35 +10,25 @@ dotenv.config({ path: '.env.local' });
 
 const tools = {
   buscarPropiedades: tool({
-    description: 'BÚSQUEDA OBLIGATORIA: Usa esta herramienta SIEMPRE que el cliente pregunte por propiedades, presupuesto o zonas.',
+    description: 'BÚSQUEDA OBLIGATORIA: Usa esta herramienta SIEMPRE para buscar propiedades si el cliente menciona zonas o presupuestos.',
     parameters: z.object({
-      zona: z.string().optional().describe('Zona extraída (ej: La Zagaleta)'),
-      precioMax: z.number().optional().describe('Presupuesto máximo (ej: 7000000)')
+      zona: z.string().describe('La zona obligatoria extraída (ej: La Zagaleta)'),
+      precioMax: z.number().describe('Presupuesto máximo en euros (ej: 7000000)')
     }),
     execute: async (args) => {
-      // Trampa anti-vagos
-      if (!args.zona && !args.precioMax) {
-        return { error: "ERROR INTERNO: Harvis, no has extraído ni la zona ni el precio. Vuelve a leer el mensaje del cliente y usa la herramienta correctamente." };
-      }
-      console.log(`\n    🔌 [TOOL SUPABASE] Datos extraídos por Harvis:`, args);
+      console.log(`\n    🔌 [TOOL SUPABASE] ¡Harvis ha disparado la búsqueda! ->`, args);
       return await searchPropertiesInSupabase(args);
     }
   }),
   crearCarpetaCliente: tool({
-    description: 'CREACIÓN DE CARPETA: Úsala cuando el cliente envíe su nombre o pida firmar un NDA/KYC.',
+    description: 'CREACIÓN OBLIGATORIA DE CARPETA: Úsala inmediatamente cuando el cliente dé su nombre o pida un NDA.',
     parameters: z.object({
-      nombreCliente: z.string().optional().describe('Nombre del cliente (ej: Charles Vance)'),
-      tipoInteraccion: z.string().optional().describe('Tipo (ej: NDA, Off-Market)')
+      nombreCliente: z.string().describe('Nombre del cliente extraído (ej: Charles Vance)'),
+      tipoInteraccion: z.string().describe('Tipo (ej: NDA y Prueba de Fondos)')
     }),
     execute: async (args) => {
-      // Trampa anti-vagos
-      if (!args.nombreCliente || args.nombreCliente === 'undefined') {
-        return { error: "ERROR INTERNO: Harvis, es IMPRESCINDIBLE que extraigas el nombre del cliente del texto (ej: Charles Vance) para crear la carpeta. ¡Inténtalo de nuevo!" };
-      }
-      
-      const interaccion = args.tipoInteraccion || 'General';
-      console.log(`\n    🔌 [TOOL DRIVE] Harvis organizando -> Cliente: ${args.nombreCliente} | Interacción: ${interaccion}`);
-      const resultado = await createClientFolder(args.nombreCliente, interaccion);
+      console.log(`\n    🔌 [TOOL DRIVE] ¡Harvis está organizando Drive! -> Cliente: ${args.nombreCliente} | Interacción: ${args.tipoInteraccion}`);
+      const resultado = await createClientFolder(args.nombreCliente, args.tipoInteraccion);
       console.log(`    ✅ [TOOL DRIVE] Respuesta de Google:`, resultado.message || resultado.error);
       return resultado;
     }
@@ -57,15 +47,15 @@ async function hablarConHarvis(mensajeCliente: string) {
   try {
     const response = await generateText({
       model: google('gemini-2.5-flash'),
-      system: SYSTEM_PROMPT + "\n\nINSTRUCCIÓN CRÍTICA: SIEMPRE debes intentar extraer la información del cliente para usar las herramientas. Si usas una herramienta, EXPLÍCALE al cliente el resultado después.",
+      system: SYSTEM_PROMPT + "\n\nREGLA SUPREMA: Es OBLIGATORIO que uses las herramientas disponibles si el mensaje del cliente coincide con su descripción. NO te limites a responder con texto sin ejecutar la herramienta primero.",
       messages: historialChat,
       tools: tools,
-      maxSteps: 5 // Esto le da a Harvis hasta 5 intentos internos si cae en nuestra trampa
+      maxSteps: 5 // Permite que ejecute la herramienta y luego responda en el mismo paso
     });
 
     console.log(`\n🤖 AGENTE HARVIS:`);
     console.log(`─────────────────────────────────────────────────────────────────────────`);
-    console.log(response.text || "(Respuesta vacía)");
+    console.log(response.text || "(Harvis ejecutó la tarea en segundo plano)");
     console.log(`─────────────────────────────────────────────────────────────────────────\n`);
 
     if (response.messages) {
