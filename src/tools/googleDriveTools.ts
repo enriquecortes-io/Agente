@@ -3,7 +3,7 @@ import dotenv from 'dotenv';
 
 dotenv.config({ path: '.env.local' });
 
-export async function createClientFolder(clientName: string) {
+export async function createClientFolder(clientName: string, interactionType: string = 'General') {
   try {
     if (!process.env.GOOGLE_CLIENT_EMAIL || !process.env.GOOGLE_PRIVATE_KEY) {
       throw new Error('Faltan las credenciales de Google en el .env.local');
@@ -18,28 +18,49 @@ export async function createClientFolder(clientName: string) {
     });
 
     const drive = google.drive({ version: 'v3', auth });
+    const parentId = process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID;
 
-    // Preparamos la carpeta nueva
-    const fileMetadata: any = {
-      name: `${clientName} - KYC & NDA`,
-      mimeType: 'application/vnd.google-apps.folder',
-    };
+    let clientFolderId = null;
 
-    // Si tenemos la carpeta padre configurada, le decimos a Google que la meta ahí
-    if (process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID) {
-      fileMetadata.parents = [process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID];
+    // PASO 1: Buscar si la carpeta principal del cliente ya existe
+    if (parentId) {
+      const q = `mimeType='application/vnd.google-apps.folder' and name='${clientName}' and '${parentId}' in parents and trashed=false`;
+      const res = await drive.files.list({ q, fields: 'files(id, name)', spaces: 'drive' });
+      
+      if (res.data.files && res.data.files.length > 0) {
+        clientFolderId = res.data.files[0].id;
+      }
     }
 
-    const folder = await drive.files.create({
-      requestBody: fileMetadata,
+    // PASO 2: Si no existe, Harvis crea la carpeta padre para ese cliente
+    if (!clientFolderId) {
+      const clientMeta: any = {
+        name: clientName,
+        mimeType: 'application/vnd.google-apps.folder',
+      };
+      if (parentId) clientMeta.parents = [parentId];
+
+      const clientFolder = await drive.files.create({ requestBody: clientMeta, fields: 'id' });
+      clientFolderId = clientFolder.data.id;
+    }
+
+    // PASO 3: Crear la subcarpeta de la interacción dentro de la del cliente
+    const interactionMeta = {
+      name: interactionType,
+      mimeType: 'application/vnd.google-apps.folder',
+      parents: [clientFolderId]
+    };
+
+    const interactionFolder = await drive.files.create({
+      requestBody: interactionMeta,
       fields: 'id, webViewLink',
     });
 
     return { 
       success: true, 
-      folderId: folder.data.id, 
-      link: folder.data.webViewLink,
-      message: `Carpeta generada con éxito.`
+      folderId: interactionFolder.data.id, 
+      link: interactionFolder.data.webViewLink,
+      message: `Subcarpeta '${interactionType}' generada dentro del cliente '${clientName}'.`
     };
     
   } catch (error: any) {

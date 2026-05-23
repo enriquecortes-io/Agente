@@ -10,10 +10,10 @@ dotenv.config({ path: '.env.local' });
 
 const tools = {
   buscarPropiedades: tool({
-    description: 'Busca propiedades en la base de datos. ES OBLIGATORIO rellenar los parámetros extrayéndolos de lo que dice el cliente.',
+    description: 'Busca propiedades en la base de datos. ES OBLIGATORIO extraer zona y precio.',
     parameters: z.object({
-      zona: z.string().describe('La zona o ubicación mencionada por el cliente (ej: La Zagaleta, Sierra Blanca).'),
-      precioMax: z.number().describe('Presupuesto máximo del cliente en euros, solo el número (ej: 7000000).')
+      zona: z.string().describe('La zona mencionada (ej: La Zagaleta, Sierra Blanca).'),
+      precioMax: z.number().describe('Presupuesto máximo en euros, solo números.')
     }),
     execute: async (args) => {
       console.log(`\n    🔌 [TOOL SUPABASE] Datos extraídos por Harvis:`, args);
@@ -21,13 +21,14 @@ const tools = {
     }
   }),
   crearCarpetaCliente: tool({
-    description: 'Crea una carpeta segura en Google Drive. ES OBLIGATORIO extraer el nombre del cliente.',
+    description: 'Crea una estructura de carpetas organizada en Drive. ES OBLIGATORIO extraer el cliente y clasificar la interacción.',
     parameters: z.object({
-      nombreCliente: z.string().describe('Nombre completo del cliente extraído de la conversación (ej: Charles Vance).')
+      nombreCliente: z.string().describe('Nombre del cliente (ej: Charles Vance).'),
+      tipoInteraccion: z.string().describe('Clasificación del documento o gestión (ej: NDA y KYC, Prueba de Fondos, Contrato de Arras, Propuestas Off-Market).')
     }),
     execute: async (args) => {
-      console.log(`\n    🔌 [TOOL DRIVE] Datos extraídos por Harvis:`, args);
-      const resultado = await createClientFolder(args.nombreCliente);
+      console.log(`\n    🔌 [TOOL DRIVE] Harvis organizando -> Cliente: ${args.nombreCliente} | Interacción: ${args.tipoInteraccion}`);
+      const resultado = await createClientFolder(args.nombreCliente, args.tipoInteraccion);
       console.log(`    ✅ [TOOL DRIVE] Respuesta de Google:`, resultado.message);
       return resultado;
     }
@@ -46,7 +47,7 @@ async function hablarConHarvis(mensajeCliente: string) {
   try {
     const response = await generateText({
       model: google('gemini-2.5-flash'),
-      system: SYSTEM_PROMPT + "\n\nREGLA DE ORO: Después de usar cualquier herramienta, SIEMPRE debes responder al cliente resumiendo lo que has hecho.",
+      system: SYSTEM_PROMPT + "\n\nREGLA DE ORO: Después de usar cualquier herramienta, SIEMPRE debes responder al cliente resumiendo lo que has hecho y facilitándole los enlaces.",
       messages: historialChat,
       tools: tools,
       maxSteps: 5
@@ -54,7 +55,7 @@ async function hablarConHarvis(mensajeCliente: string) {
 
     console.log(`\n🤖 AGENTE HARVIS:`);
     console.log(`─────────────────────────────────────────────────────────────────────────`);
-    console.log(response.text || "(Esperando siguiente interacción...)");
+    console.log(response.text || "(Harvis sigue procesando...)");
     console.log(`─────────────────────────────────────────────────────────────────────────\n`);
 
     if (response.messages) {
