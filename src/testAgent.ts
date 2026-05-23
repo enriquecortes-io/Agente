@@ -10,13 +10,13 @@ dotenv.config({ path: '.env.local' });
 
 const tools = {
   buscarPropiedades: tool({
-    description: 'Busca propiedades en Supabase. Úsala cuando el cliente pregunte por villas, precios o zonas.',
+    description: 'Busca propiedades en la base de datos. Úsala cuando el cliente pregunte por villas o ubicaciones.',
     parameters: z.object({
-      zona: z.string().describe('Zona o ciudad (ej: La Zagaleta, Sierra Blanca)'),
-      precioMax: z.number().describe('Presupuesto máximo en euros (ej: 7000000)')
+      zona: z.string().describe('Ubicación en Marbella (ej: La Zagaleta, Sierra Blanca)').optional(),
+      precioMax: z.number().describe('Presupuesto máximo en euros').optional()
     }),
     execute: async (args) => {
-      console.log(`\n    🔌 [TOOL SUPABASE] Harvis extrajo -> Zona: ${args.zona}, Presupuesto: ${args.precioMax}€`);
+      console.log(`\n    🔌 [TOOL SUPABASE] Datos extraídos por Harvis:`, args);
       return await searchPropertiesInSupabase(args);
     }
   }),
@@ -26,41 +26,46 @@ const tools = {
       nombreCliente: z.string().describe('Nombre del cliente para nombrar la carpeta (ej: Charles Vance)')
     }),
     execute: async (args) => {
-      console.log(`\n    🔌 [TOOL DRIVE] Harvis extrajo -> Cliente: ${args.nombreCliente}`);
-      const resultado = await createClientFolder(args.nombreCliente || 'Cliente Sin Nombre');
-      console.log(`    ✅ [TOOL DRIVE] Confirmación de Google:`, resultado.message);
+      console.log(`\n    🔌 [TOOL DRIVE] Datos extraídos por Harvis:`, args);
+      const nombreFinal = args.nombreCliente || 'Cliente Sin Nombre';
+      const resultado = await createClientFolder(nombreFinal);
+      console.log(`    ✅ [TOOL DRIVE] Respuesta de Google:`, resultado.message);
       return resultado;
     }
   })
 };
 
-// Historial de la conversación
-const historialChat: CoreMessage[] = [];
+// Aquí guardaremos TODO el contexto (mensajes, llamadas a herramientas y respuestas)
+let historialChat: CoreMessage[] = [];
 
 async function hablarConHarvis(mensajeCliente: string) {
   console.log(`\n╔═════════════════════════════════════════════════════════════════════════`);
   console.log(`║ 👤 CLIENTE: "${mensajeCliente}"`);
   console.log(`╚═════════════════════════════════════════════════════════════════════════`);
 
-  // Añadimos el mensaje del usuario al historial
   historialChat.push({ role: 'user', content: mensajeCliente });
 
   try {
     const response = await generateText({
       model: google('gemini-2.5-flash'),
-      system: SYSTEM_PROMPT,
-      messages: historialChat, // Le pasamos todo el contexto
+      // Le inyectamos una orden crítica al sistema para que NO se quede callado
+      system: SYSTEM_PROMPT + "\n\nREGLA CRÍTICA: SIEMPRE debes responder al cliente con texto natural después de usar una herramienta. NUNCA dejes tu respuesta en blanco.",
+      messages: historialChat,
       tools: tools,
       maxSteps: 5
     });
 
     console.log(`\n🤖 AGENTE HARVIS:`);
     console.log(`─────────────────────────────────────────────────────────────────────────`);
-    console.log(response.text);
+    console.log(response.text || "(Harvis se ha quedado pensando...)");
     console.log(`─────────────────────────────────────────────────────────────────────────\n`);
 
-    // Añadimos la respuesta de Harvis al historial
-    historialChat.push({ role: 'assistant', content: response.text });
+    // Actualizamos el historial con todo lo que ha pasado por dentro (¡la memoria real!)
+    if (response.messages) {
+       historialChat = response.messages;
+    } else {
+       historialChat.push({ role: 'assistant', content: response.text });
+    }
 
   } catch (error) {
     console.error('❌ Error durante la simulación:', error);
