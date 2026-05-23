@@ -1,50 +1,38 @@
-import { generateText } from 'ai';
+import { generateText, tool } from 'ai';
 import { google } from '@ai-sdk/google';
 import { z } from 'zod';
 import { SYSTEM_PROMPT } from './agents/realEstateExecutive.js';
 import { searchPropertiesInSupabase } from './tools/supabaseTools.js';
 import { createClientFolder } from './tools/googleDriveTools.js';
-import { sendCrmLeadNotification, triggerCmsPropertyPublish } from './tools/webhookTools.js';
 import dotenv from 'dotenv';
 
 dotenv.config({ path: '.env.local' });
 
 const tools = {
-  buscarPropiedades: {
+  buscarPropiedades: tool({
     description: 'Consulta el inventario disponible en Supabase filtrando por ubicación, presupuesto máximo y estilo de vida.',
     parameters: z.object({
       zona: z.string().optional().describe('Ubicación en Marbella (ej: La Zagaleta, Sierra Blanca).'),
       precioMax: z.number().optional().describe('Presupuesto máximo del inversor en euros.'),
       estilo: z.string().optional().describe('Estilo arquitectónico o tags de ambiente.')
     }),
-    execute: async ({ zona, precioMax, estilo }: any) => {
+    execute: async ({ zona, precioMax, estilo }) => {
       console.log(`\n    🔌 [TOOL SUPABASE] Buscando DB -> Zona: ${zona || 'Todas'}, Máx: ${precioMax || 'Sin límite'}€, Estilo: ${estilo || 'Todos'}`);
       return await searchPropertiesInSupabase({ zona, precioMax, estilo });
     }
-  },
-  crearCarpetaCliente: {
+  }),
+  crearCarpetaCliente: tool({
     description: 'Crea un espacio seguro en Google Drive para guardar el KYC o NDA de un inversor.',
     parameters: z.object({
-      nombreCliente: z.string().describe('Nombre completo del cliente o fondo inversor.')
+      nombreCliente: z.string().describe('Nombre completo del cliente o fondo inversor (ej: Charles Vance).')
     }),
-    execute: async ({ nombreCliente }: any) => {
+    execute: async ({ nombreCliente }) => {
       console.log(`\n    🔌 [TOOL DRIVE] Generando espacio confidencial para: ${nombreCliente}`);
-      return await createClientFolder(nombreCliente);
+      const resultado = await createClientFolder(nombreCliente);
+      console.log(`    ✅ [TOOL DRIVE] Resultado de Google:`, resultado.message);
+      return resultado;
     }
-  },
-  notificarLeadCRM: {
-    description: 'Sincroniza un perfil de inversor cualificado orgánicamente enviando sus datos al CRM.',
-    parameters: z.object({
-      nombre: z.string().describe('Nombre del lead.'),
-      contacto: z.string().describe('Número de teléfono o email.'),
-      presupuesto: z.number().optional().describe('Presupuesto máximo.'),
-      notasCualificacion: z.string().describe('Resumen de la conversación.')
-    }),
-    execute: async (leadData: any) => {
-      console.log(`\n    🔌 [TOOL CRM] Disparando webhook de cualificación para: ${leadData.nombre}`);
-      return await sendCrmLeadNotification(leadData);
-    }
-  }
+  })
 };
 
 async function simularConversacion(mensajeCliente: string) {
@@ -61,7 +49,7 @@ async function simularConversacion(mensajeCliente: string) {
       maxSteps: 5
     });
 
-    console.log(`\n🤖 AGENTE REE:`);
+    console.log(`\n🤖 AGENTE HARVIS:`);
     console.log(`─────────────────────────────────────────────────────────────────────────`);
     console.log(response.text);
     console.log(`─────────────────────────────────────────────────────────────────────────\n`);
