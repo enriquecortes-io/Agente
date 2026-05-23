@@ -3,65 +3,62 @@ import dotenv from 'dotenv';
 
 dotenv.config({ path: '.env.local' });
 
-// Usamos valores por defecto por si el .env.local aún no tiene las credenciales reales
-const supabaseUrl = process.env.SUPABASE_URL || 'https://sqdvkfcghdjxtyuybxpy.supabase.co/';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'sb_publishable_LIaG8wb4ciGYSVkUAI8UeQ_wj3BVR4j';
+const supabaseUrl = process.env.SUPABASE_URL || '';
+const supabaseKey = process.env.SUPABASE_ANON_KEY || '';
+const supabase = createClient(supabaseUrl, supabaseKey);
 
-export const supabase = createClient(supabaseUrl, supabaseKey);
-
-interface SearchFilters {
-  zona?: string;
-  precioMax?: number;
-  estilo?: string;
-}
-
-export async function searchPropertiesInSupabase(filters: SearchFilters) {
+export async function searchPropertiesInSupabase(args: { zona?: string; precioMax?: number }) {
   try {
+    if (!supabaseUrl || !supabaseKey) {
+      return { success: false, error: 'Faltan credenciales de Supabase (SUPABASE_URL y SUPABASE_ANON_KEY) en .env.local' };
+    }
+
+    // Empezamos a construir la consulta a tu tabla 'properties'
     let query = supabase
       .from('properties')
-      .select('*')
-      .eq('status', 'Publicada');
+      .select('id, referencia, titulo, precio, ubicacion, zona, habitaciones, banos, m2_construidos')
+      .eq('activa', true) // Solo buscamos propiedades que estén activas
+      .limit(5);
 
-    if (filters.zona) {
-      query = query.ilike('location', `%${filters.zona}%`);
+    // Si Harvis detecta una zona, buscamos tanto en la columna 'ubicacion' como en 'zona'
+    if (args.zona) {
+      query = query.or(`ubicacion.ilike.%${args.zona}%,zona.ilike.%${args.zona}%`);
     }
 
-    if (filters.precioMax) {
-      query = query.lte('price', filters.precioMax);
+    // Si Harvis detecta un presupuesto máximo, filtramos por precio
+    if (args.precioMax) {
+      query = query.lte('precio', args.precioMax);
     }
 
-    if (filters.estilo) {
-      query = query.ilike('lifestyle_tags', `%${filters.estilo}%`);
+    const { data, error } = await query;
+
+    if (error) {
+      console.error("Error consultando Supabase:", error);
+      return { success: false, error: error.message };
     }
 
-    const { data, error } = await query.limit(3);
+    // Formateamos los datos para que Gemini los mastique fácilmente 
+    // (Como tu título es JSONB, extraemos el texto para que la IA no se líe)
+    const propiedadesFormateadas = data.map(p => ({
+      id: p.id,
+      referencia: p.referencia || 'N/A',
+      // Intentamos sacar el título, si es un objeto JSON sacamos la propiedad 'es' o 'en'
+      titulo: typeof p.titulo === 'object' && p.titulo !== null ? (p.titulo.es || p.titulo.en || JSON.stringify(p.titulo)) : p.titulo,
+      precio: p.precio,
+      ubicacion: p.ubicacion || p.zona,
+      habitaciones: p.habitaciones,
+      banos: p.banos,
+      m2_construidos: p.m2_construidos
+    }));
 
-    // Si da error de conexión (porque las credenciales son falsas o la tabla no existe aún), forzamos el catch
-    if (error) throw error;
+    return { 
+      success: true, 
+      cantidad_encontrada: propiedadesFormateadas.length, 
+      propiedades: propiedadesFormateadas 
+    };
     
-    // Si la conexión va bien pero no hay datos, devolvemos un mock
-    if (!data || data.length === 0) {
-      return [{
-        id: 'mock-1',
-        title: 'Villa Serenity',
-        location: 'La Zagaleta',
-        price: 6500000,
-        lifestyle_tags: ['privacidad', 'vistas al mar', 'minimalista', 'arquitectura orgánica'],
-        status: 'Publicada'
-      }];
-    }
-
-    return data;
-  } catch (error) {
-    console.warn('[Supabase Tool] Aviso: Error de conexión o credenciales no válidas. Sirviendo datos mockeados para la simulación.');
-    // Devolvemos datos simulados para que el Agente pueda continuar el test y veas cómo redacta
-    return [{
-      id: 'mock-1',
-      title: 'Villa Serenity (Off-Market)',
-      location: 'La Zagaleta',
-      price: 6500000,
-      lifestyle_tags: ['privacidad absoluta', 'vistas al mar', 'minimalista', 'arquitectura orgánica'],
-      status: 'Off-Market'
-    }];
+  } catch (error: any) {
+    console.error('Error al conectar con Supabase:', error);
+    return { success: false, error: error.message };
   }
 }
