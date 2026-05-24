@@ -90,6 +90,7 @@ async function testWebhooks() {
     presupuesto: 4_500_000,
     estiloBuscado: 'Minimalista con vistas al mar',
     notasCualificacion: 'Muy cualificado. Timeline: 3 meses.',
+    tipoLead: 'Venta' as const,
   }));
 
   log('triggerCmsPropertyPublish', await triggerCmsPropertyPublish({
