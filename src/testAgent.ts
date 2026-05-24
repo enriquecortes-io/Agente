@@ -238,7 +238,7 @@ async function testAgenteDirecto(mensaje = 'Hola, busco una villa en Marbella') 
     model: google('gemini-2.5-flash'),
     system: SYSTEM_PROMPT,
     messages: [{ role: 'user', content: mensaje }],
-    maxSteps: 5,
+    maxSteps: 10,
     tools: {
       buscarPropiedades: {
         description: 'Busca propiedades en Supabase por zona y precio.',
@@ -288,6 +288,7 @@ async function testAgenteDirecto(mensaje = 'Hola, busco una villa en Marbella') 
     },
   });
 
-  console.log(`\n🤖 Harvis: ${result.text}`);
+  const textoFinal = result.text || result.steps?.filter((s: any) => s.text)?.map((s: any) => s.text)?.join("\n") || "(sin respuesta de texto)";
+  console.log(`\n🤖 Harvis: ${textoFinal}`);
   log('Agente directo', { success: true, steps: result.steps?.length ?? 0 });
 }
