@@ -59,6 +59,10 @@ async function ejecutarTool(nombre: string, args: any, clienteNombre?: string): 
     case 'registrarCliente':
       return await prepararEntornoCliente(args.nombreCliente, args.tipoLead);
     case 'guardarConversacion':
+      // Rechazar docIds inventados — deben ser strings largos de Google Docs
+        console.log('  [⚠️ IGNORADO] docId inválido — Harvis debe llamar registrarCliente primero');
+        return { success: false, error: 'docId inválido. Llama registrarCliente primero para obtener el docId real.' };
+      }
       await actualizarHistorial(args.docId, args.mensajeUsuario, args.respuestaAgente);
       await guardarConversacionSupabase({
         clienteNombre: args.clienteNombre || clienteNombre || 'Desconocido',
