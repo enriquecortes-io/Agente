@@ -1,9 +1,11 @@
 import dotenv from 'dotenv';
 dotenv.config({ path: '.env.local' });
 
+import { GoogleGenerativeAI, Tool, FunctionCallingMode } from '@google/generative-ai';
 import { searchPropertiesInSupabase } from './tools/supabaseTools.js';
 import { prepararEntornoCliente, actualizarHistorial, borrarCarpetasAntiguas } from './tools/driveLogger.js';
 import { sendCrmLeadNotification, triggerCmsPropertyPublish } from './tools/webhookTools.js';
+import { SYSTEM_PROMPT } from './agents/realEstateExecutive.js';
 
 const OK   = '✅';
 const FAIL = '❌';
@@ -23,18 +25,17 @@ function header(title: string) {
 
 async function testSupabase() {
   header('Supabase — Búsqueda de propiedades');
-  log('Búsqueda exacta (La Zagaleta, 5M€)', await searchPropertiesInSupabase({ urbanizacion: 'La Zagaleta', municipioDeducido: 'Benahavís', precioMax: 5_000_000 }));
-  log('Búsqueda sin zona (solo precio 3M€)', await searchPropertiesInSupabase({ precioMax: 3_000_000 }));
-  log('Búsqueda sin filtros', await searchPropertiesInSupabase({}));
+  log('La Zagaleta 5M€', await searchPropertiesInSupabase({ urbanizacion: 'La Zagaleta', municipioDeducido: 'Benahavís', precioMax: 5_000_000 }));
+  log('Solo precio 3M€', await searchPropertiesInSupabase({ precioMax: 3_000_000 }));
+  log('Sin filtros', await searchPropertiesInSupabase({}));
 }
 
 async function testDrive() {
   header('Google Drive — Entorno de cliente');
-  const nombre = `Test Cliente ${Date.now()}`;
   try {
-    const entorno = await prepararEntornoCliente(nombre, 'Venta');
+    const entorno = await prepararEntornoCliente(`Test ${Date.now()}`, 'Venta');
     log('prepararEntornoCliente', { success: true, ...entorno });
-    await actualizarHistorial(entorno.docId, 'Mensaje de prueba', 'Respuesta de prueba');
+    await actualizarHistorial(entorno.docId, 'Mensaje test', 'Respuesta test');
     log('actualizarHistorial', { success: true });
   } catch (e: any) {
     log('prepararEntornoCliente', { success: false, error: e.message });
@@ -42,17 +43,16 @@ async function testDrive() {
 }
 
 async function testWebhooks() {
-  header('Webhooks — CRM y CMS');
+  header('Webhooks — CRM');
   log('sendCrmLeadNotification', await sendCrmLeadNotification({
     nombre: 'Test Investor', contacto: '+34 600 000 000',
-    presupuesto: 4_500_000, estiloBuscado: 'Minimalista',
-    notasCualificacion: 'Muy cualificado. Timeline: 3 meses.',
+    presupuesto: 4_500_000, notasCualificacion: 'Test lead.',
     tipoLead: 'Venta',
   }));
 }
 
 async function cleanupDrive() {
-  header('Cleanup — Borrar carpetas antiguas');
+  header('Cleanup');
   try {
     await borrarCarpetasAntiguas();
     log('borrarCarpetasAntiguas', { success: true });
@@ -61,97 +61,145 @@ async function cleanupDrive() {
   }
 }
 
+// ─── Ejecutor de tools ────────────────────────────────────────────────────────
+async function ejecutarTool(nombre: string, args: any): Promise<any> {
+  console.log(`  [Tool] ${nombre} →`, JSON.stringify(args));
+  switch (nombre) {
+    case 'registrarCliente':
+      return await prepararEntornoCliente(args.nombreCliente, args.tipoLead);
+    case 'guardarConversacion':
+      await actualizarHistorial(args.docId, args.mensajeUsuario, args.respuestaAgente);
+      return { success: true };
+    case 'buscarPropiedades':
+      return await searchPropertiesInSupabase({ urbanizacion: args.zona, municipioDeducido: args.zona, precioMax: args.precioMax });
+    case 'notificarLeadCRM':
+      return await sendCrmLeadNotification(args);
+    default:
+      return { error: `Tool desconocida: ${nombre}` };
+  }
+}
+
 async function testAgenteDirecto(mensaje = 'Hola, soy Carlos García, busco una villa en La Zagaleta con presupuesto de 5 millones') {
-  header('Agente Directo — con tools');
+  header('Agente Directo — Gemini con Function Calling');
 
-  const { google } = await import('@ai-sdk/google');
-  const { streamText } = await import('ai');
-  const { SYSTEM_PROMPT } = await import('./agents/realEstateExecutive.js');
+  const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+  if (!apiKey) throw new Error('Falta GOOGLE_GENERATIVE_AI_API_KEY en .env.local');
 
-  console.log(`\n💬 Usuario: "${mensaje}"\n`);
+  const genAI = new GoogleGenerativeAI(apiKey);
 
-  const result = streamText({
-    model: google('gemini-2.5-flash'),
-    system: SYSTEM_PROMPT,
-    messages: [{ role: 'user', content: mensaje }],
-    maxSteps: 10,
-    tools: {
-      registrarCliente: {
-        description: 'Registra al cliente en Drive. Llama esto en cuanto tengas el nombre y el tipo de gestión.',
+  const tools: Tool[] = [{
+    functionDeclarations: [
+      {
+        name: 'registrarCliente',
+        description: 'Registra al cliente en Drive. Llama esto en cuanto tengas nombre y tipo de gestión.',
         parameters: {
-          type: 'object' as const,
+          type: 'OBJECT' as any,
           properties: {
-            nombreCliente: { type: 'string', description: 'Nombre completo del cliente.' },
-            tipoLead: { type: 'string', enum: ['Venta', 'Captacion', 'Gestion'], description: 'Tipo de gestión.' },
+            nombreCliente: { type: 'STRING' as any, description: 'Nombre completo del cliente.' },
+            tipoLead: { type: 'STRING' as any, description: 'Venta, Captacion o Gestion.' },
           },
           required: ['nombreCliente', 'tipoLead'],
         },
-        execute: async ({ nombreCliente, tipoLead }: { nombreCliente: string, tipoLead: 'Venta' | 'Captacion' | 'Gestion' }) => {
-          console.log(`  [Tool] registrarCliente → ${nombreCliente} (${tipoLead})`);
-          const r = await prepararEntornoCliente(nombreCliente, tipoLead);
-          return { ...r, ok: true };
-        },
       },
-      guardarConversacion: {
-        description: 'Guarda el turno de conversación en el historial.',
+      {
+        name: 'guardarConversacion',
+        description: 'Guarda el turno de conversación en el historial. Llama esto tras cada respuesta.',
         parameters: {
-          type: 'object' as const,
+          type: 'OBJECT' as any,
           properties: {
-            docId: { type: 'string', description: 'ID del documento de historial.' },
-            mensajeUsuario: { type: 'string', description: 'Mensaje del cliente.' },
-            respuestaAgente: { type: 'string', description: 'Resumen de la respuesta de Harvis.' },
+            docId: { type: 'STRING' as any, description: 'ID del doc obtenido al registrar cliente.' },
+            mensajeUsuario: { type: 'STRING' as any, description: 'Mensaje del cliente.' },
+            respuestaAgente: { type: 'STRING' as any, description: 'Resumen de la respuesta de Harvis.' },
           },
           required: ['docId', 'mensajeUsuario', 'respuestaAgente'],
         },
-        execute: async ({ docId, mensajeUsuario, respuestaAgente }: { docId: string, mensajeUsuario: string, respuestaAgente: string }) => {
-          console.log(`  [Tool] guardarConversacion → docId: ${docId}`);
-          await actualizarHistorial(docId, mensajeUsuario, respuestaAgente);
-          return { success: true };
-        },
       },
-      buscarPropiedades: {
+      {
+        name: 'buscarPropiedades',
         description: 'Busca propiedades en Supabase por zona y precio.',
         parameters: {
-          type: 'object' as const,
+          type: 'OBJECT' as any,
           properties: {
-            zona: { type: 'string', description: 'Zona en Marbella.' },
-            precioMax: { type: 'number', description: 'Presupuesto máximo en euros.' },
+            zona: { type: 'STRING' as any, description: 'Zona en Marbella.' },
+            precioMax: { type: 'NUMBER' as any, description: 'Presupuesto máximo en euros.' },
           },
         },
-        execute: async ({ zona, precioMax }: { zona?: string, precioMax?: number }) => {
-          console.log(`  [Tool] buscarPropiedades → ${zona}, ${precioMax}`);
-          return await searchPropertiesInSupabase({ urbanizacion: zona, municipioDeducido: zona, precioMax });
-        },
       },
-      notificarLeadCRM: {
-        description: 'Registra el lead en Supabase CRM.',
+      {
+        name: 'notificarLeadCRM',
+        description: 'Registra el lead cualificado en el CRM de Supabase.',
         parameters: {
-          type: 'object' as const,
+          type: 'OBJECT' as any,
           properties: {
-            nombre: { type: 'string' },
-            contacto: { type: 'string' },
-            presupuesto: { type: 'number' },
-            notasCualificacion: { type: 'string' },
-            tipoLead: { type: 'string', enum: ['Venta', 'Captacion', 'Gestion'] },
+            nombre: { type: 'STRING' as any },
+            contacto: { type: 'STRING' as any },
+            presupuesto: { type: 'NUMBER' as any },
+            notasCualificacion: { type: 'STRING' as any },
+            tipoLead: { type: 'STRING' as any },
           },
           required: ['nombre', 'contacto', 'notasCualificacion'],
         },
-        execute: async (lead: any) => {
-          console.log(`  [Tool] notificarLeadCRM → ${lead.nombre}`);
-          return await sendCrmLeadNotification(lead);
-        },
       },
-    },
+    ],
+  }];
+
+  const model = genAI.getGenerativeModel({
+    model: 'gemini-2.5-flash',
+    systemInstruction: SYSTEM_PROMPT,
+    tools,
+    toolConfig: { functionCallingConfig: { mode: FunctionCallingMode.AUTO } },
   });
 
-  let textoCompleto = '';
-  for await (const chunk of result.textStream) {
-    process.stdout.write(chunk);
-    textoCompleto += chunk;
+  const chat = model.startChat({ history: [] });
+
+  console.log(`\n💬 Usuario: "${mensaje}"\n`);
+
+  // Bucle agentico — max 10 iteraciones
+  let inputActual: any = mensaje;
+  let docId: string | null = null;
+
+  for (let i = 0; i < 10; i++) {
+    const result = await chat.sendMessage(inputActual);
+    const response = result.response;
+    const candidate = response.candidates?.[0];
+    const parts = candidate?.content?.parts ?? [];
+
+    // Procesar parts
+    const toolResults = [];
+    let textoRespuesta = '';
+
+    for (const part of parts) {
+      if (part.text) {
+        textoRespuesta += part.text;
+      }
+      if (part.functionCall) {
+        const { name, args } = part.functionCall;
+        const toolResult = await ejecutarTool(name, args);
+        if (name === 'registrarCliente' && toolResult.docId) {
+          docId = toolResult.docId;
+        }
+        toolResults.push({
+          functionResponse: { name, response: toolResult },
+        });
+      }
+    }
+
+    if (textoRespuesta) {
+      console.log(`\n🤖 Harvis: ${textoRespuesta}`);
+    }
+
+    // Si hay resultados de tools, enviamos de vuelta y continuamos
+    if (toolResults.length > 0) {
+      inputActual = toolResults;
+      continue;
+    }
+
+    // Sin tool calls — el agente terminó
+    break;
   }
 
   console.log(`\n`);
-  log('Agente directo', { success: true, chars: textoCompleto.length });
+  log('Agente directo', { success: true, docId });
 }
 
 async function main() {
