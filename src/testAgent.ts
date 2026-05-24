@@ -10,40 +10,42 @@ dotenv.config({ path: '.env.local' });
 
 const tools = {
   buscarPropiedades: tool({
-    description: 'Obligatorio para buscar casas. Extrae la zona y el presupuesto.',
-    // TRUCO NINJA: Pedimos todo como STRING para que la IA no se bloquee
+    description: 'Búsqueda de propiedades. Extrae la zona y el presupuesto máximo.',
     parameters: z.object({
-      zona: z.string().describe('Nombre de la zona (ej: "La Zagaleta", "Sierra Blanca")'),
-      precioMax: z.string().describe('Presupuesto máximo en números pero como texto (ej: "7000000")')
+      zona: z.string().describe('Ubicación exacta (ej: "La Zagaleta", "Sierra Blanca")'),
+      // Pedimos STRING para que la IA no se cuelgue procesando JSON numéricos
+      precioMaxString: z.string().describe('El presupuesto máximo tal cual lo dice el cliente (ej: "7M", "7 millones", "7000000")')
     }),
     execute: async (args) => {
-      // Si por algún milagro llega vacío, forzamos valores por defecto para que no rompa
-      const zonaSegura = args.zona && args.zona !== 'undefined' ? args.zona : 'La Zagaleta';
-      
-      // Limpiamos el texto que mande Gemini (por si manda "7M" o "7000000€") y lo pasamos a número
-      let precioLimpio = 7000000;
-      if (args.precioMax && args.precioMax !== 'undefined') {
-         const soloNumeros = args.precioMax.replace(/\D/g, ''); // Quita letras y símbolos
-         if (soloNumeros) precioLimpio = parseInt(soloNumeros);
+      // 🧠 CEREBRO FINANCIERO: Convertir "7M" o "7 millones" en 7000000
+      let precioCalculado = 0;
+      if (args.precioMaxString) {
+        const strLimpio = args.precioMaxString.toLowerCase().replace(/euros|€/g, '').trim();
+        
+        if (strLimpio.includes('m') || strLimpio.includes('millon')) {
+          // Extrae solo el dígito (ej: "7") y lo multiplica
+          const numero = parseFloat(strLimpio.replace(/[^\d.,]/g, '').replace(',', '.'));
+          if (!isNaN(numero)) precioCalculado = numero * 1000000;
+        } else {
+          // Si ya viene como 7000000
+          const numero = parseInt(strLimpio.replace(/\D/g, ''));
+          if (!isNaN(numero)) precioCalculado = numero;
+        }
       }
 
-      console.log(`\n    🔌 [TOOL SUPABASE] ¡Harvis busca! -> Zona: ${zonaSegura}, Precio Max: ${precioLimpio}€`);
-      return await searchPropertiesInSupabase({ zona: zonaSegura, precioMax: precioLimpio });
+      console.log(`\n    🔌 [TOOL SUPABASE] ¡Harvis busca! -> Zona IA: "${args.zona}" | Presupuesto Traducido: ${precioCalculado}€`);
+      return await searchPropertiesInSupabase({ zona: args.zona, precioMax: precioCalculado });
     }
   }),
   crearCarpetaCliente: tool({
-    description: 'Obligatorio para organizar documentos del cliente (NDA, Proof of Funds).',
-    // TRUCO NINJA: Todo en STRING
+    description: 'Crea carpeta de Drive para clientes nuevos.',
     parameters: z.object({
       nombreCliente: z.string().describe('Nombre del cliente (ej: "Charles Vance")'),
-      tipoInteraccion: z.string().describe('Tipo de archivo (ej: "NDA")')
+      tipoInteraccion: z.string().describe('Documento requerido (ej: "NDA")')
     }),
     execute: async (args) => {
-      const clienteSeguro = args.nombreCliente && args.nombreCliente !== 'undefined' ? args.nombreCliente : 'Charles Vance';
-      const interaccionSegura = args.tipoInteraccion && args.tipoInteraccion !== 'undefined' ? args.tipoInteraccion : 'General';
-      
-      console.log(`\n    🔌 [TOOL DRIVE] ¡Harvis organiza! -> Cliente: ${clienteSeguro} | Interacción: ${interaccionSegura}`);
-      const resultado = await createClientFolder(clienteSeguro, interaccionSegura);
+      console.log(`\n    🔌 [TOOL DRIVE] ¡Harvis organiza! -> Cliente: ${args.nombreCliente} | Interacción: ${args.tipoInteraccion}`);
+      const resultado = await createClientFolder(args.nombreCliente, args.tipoInteraccion);
       console.log(`    ✅ [TOOL DRIVE] Google dice:`, resultado.message || resultado.error);
       return resultado;
     }
@@ -63,7 +65,8 @@ async function hablarConHarvis(mensajeCliente: string) {
     const response = await generateText({
       model: google('gemini-2.5-flash'),
       temperature: 0.1,
-      system: SYSTEM_PROMPT + "\n\nINSTRUCCIÓN CRÍTICA: Debes extraer los datos. Si el cliente dice '6M a 7M', extrae '7000000'. Si dice su nombre, extráelo. NO MANDES CAMPOS VACÍOS.",
+      // Instrucción brutalmente clara
+      system: SYSTEM_PROMPT + "\n\nREGLA ESTRICTA: Cuando el cliente diga su presupuesto (ej. '6M to 7M'), debes extraer el valor MÁS ALTO (ej. '7M') y enviarlo en el campo precioMaxString. Extrae siempre la zona.",
       messages: historialChat,
       tools: tools,
       maxSteps: 5
@@ -71,7 +74,7 @@ async function hablarConHarvis(mensajeCliente: string) {
 
     console.log(`\n🤖 AGENTE HARVIS:`);
     console.log(`─────────────────────────────────────────────────────────────────────────`);
-    console.log(response.text || "(Acción ejecutada correctamente)");
+    console.log(response.text || "(Procesado correctamente)");
     console.log(`─────────────────────────────────────────────────────────────────────────\n`);
 
     if (response.messages) historialChat = response.messages;
