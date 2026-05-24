@@ -8,17 +8,25 @@ dotenv.config({ path: '.env.local' });
 
 const tools = {
   buscarPropiedades: tool({
-    // EL TRUCO ESTÁ AQUÍ: Mencionar las variables exactas en la descripción
-    description: 'MANDATORY TOOL to search for properties. YOU MUST extract and provide the following JSON keys: "zonas", "municipios", and "presupuesto". Do not leave them empty.',
+    description: 'Búsqueda obligatoria de propiedades.',
+    // 🔥 EL HACK: 1 solo campo. Le quitamos a Gemini la responsabilidad de hacer JSONs complejos.
     parameters: z.object({
-      zonas: z.string().describe('The exact locations requested by the user. Example: "Sotogrande, La Zagaleta"'),
-      municipios: z.string().describe('The Spanish municipalities for those locations. Example: "San Roque, Benahavis"'),
-      presupuesto: z.string().describe('The maximum budget converted to a pure number string. Example: "7000000"')
-    }).required(), // <-- Forzamos a Zod a que exija los campos en el esquema duro
+      extraccion: z.string().describe('OBLIGATORIO. Escribe las zonas, los municipios deducidos y el presupuesto separados por el símbolo |. Ejemplo EXACTO: "Sotogrande, La Zagaleta|San Roque, Benahavis|7000000"')
+    }),
     execute: async (args) => {
+      // Si por algún milagro manda vacío, lo pillamos
+      const textoSeguro = args.extraccion || '||0';
+      
+      // 🔪 Cortamos el texto por la tubería "|"
+      const partes = textoSeguro.split('|');
+      const zonas = partes[0] ? partes[0].trim() : '';
+      const municipios = partes[1] ? partes[1].trim() : '';
+      const presupuestoStr = partes[2] ? partes[2].trim() : '0';
+
+      // Calculamos el precio
       let precioCalculado = 0;
-      if (args.presupuesto) {
-        const strLimpio = args.presupuesto.toLowerCase().replace(/euros|€/g, '').trim();
+      if (presupuestoStr) {
+        const strLimpio = presupuestoStr.toLowerCase().replace(/euros|€/g, '').trim();
         if (strLimpio.includes('m') || strLimpio.includes('millon')) {
           const numero = parseFloat(strLimpio.replace(/[^\d.,]/g, '').replace(',', '.'));
           if (!isNaN(numero)) precioCalculado = numero * 1000000;
@@ -28,14 +36,15 @@ const tools = {
         }
       }
 
-      console.log(`\n    🔌 [TOOL SUPABASE] ¡HARVIS HA RELLENADO EL JSON!`);
-      console.log(`    📍 Zonas extraídas:    ${args.zonas}`);
-      console.log(`    🗺️ Municipios (IA):    ${args.municipios}`);
+      console.log(`\n    🔌 [TOOL SUPABASE] ¡HACK COMPLETADO CON ÉXITO!`);
+      console.log(`    📦 Raw Text de Gemini: ${textoSeguro}`);
+      console.log(`    📍 Zonas extraídas:    ${zonas}`);
+      console.log(`    🗺️ Municipios (IA):    ${municipios}`);
       console.log(`    💰 Presupuesto Max:    ${precioCalculado}€`);
 
       return await searchPropertiesInSupabase({ 
-        urbanizacion: args.zonas, 
-        municipioDeducido: args.municipios, 
+        urbanizacion: zonas, 
+        municipioDeducido: municipios, 
         precioMax: precioCalculado 
       });
     }
@@ -55,7 +64,10 @@ async function hablarConHarvis(mensajeCliente: string) {
     const response = await generateText({
       model: google('gemini-2.5-flash'),
       temperature: 0,
-      system: "You are a data extraction bot. You must use the buscarPropiedades tool and fill in 'zonas', 'municipios', and 'presupuesto' perfectly.",
+      system: `Eres un extractor de datos en texto plano. 
+DEBES llamar a la herramienta 'buscarPropiedades'.
+Tu ÚNICA misión es generar un string separado por barras '|' con: Zonas pedidas | Municipios españoles deducidos | Presupuesto en números.
+EJEMPLO DE RESPUESTA: "Sotogrande, La Zagaleta|San Roque, Benahavis|7000000"`,
       messages: historialChat,
       tools: tools,
       toolChoice: 'required',
@@ -64,7 +76,7 @@ async function hablarConHarvis(mensajeCliente: string) {
 
     console.log(`\n🤖 AGENTE HARVIS:`);
     console.log(`─────────────────────────────────────────────────────────────────────────`);
-    console.log(response.text || "(Herramienta ejecutada con éxito)");
+    console.log(response.text || "(Herramienta ejecutada)");
     console.log(`─────────────────────────────────────────────────────────────────────────\n`);
 
   } catch (error: any) {
