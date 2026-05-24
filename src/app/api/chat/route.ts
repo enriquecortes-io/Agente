@@ -37,19 +37,44 @@ async function llamarNvidia(messages: any[], apiKey: string) {
   return (await res.json()).choices?.[0]?.message;
 }
 
+async function procesarToolCall(nombre: string, args: any, requestId: string, docId: string | null, crmNotificado: boolean, conversacionGuardada: boolean) {
+  console.log(`[${requestId}] Tool: ${nombre}`, JSON.stringify(args));
+  let resultado: any = { success: true };
+
+  if (nombre === 'registrarCliente') {
+    resultado = await prepararEntornoCliente(args.nombreCliente, args.tipoLead);
+  } else if (nombre === 'buscarPropiedades') {
+    resultado = await searchPropertiesInSupabase({ urbanizacion: args.zona, municipioDeducido: args.zona, precioMax: args.precioMax });
+  } else if (nombre === 'notificarLeadCRM' && !crmNotificado) {
+    resultado = await sendCrmLeadNotification(args);
+    if (resultado.success) {
+      notificarEnrique({ nombre: args.nombre, contacto: args.contacto, presupuesto: args.presupuesto, zona: args.zona, tipoLead: args.tipoLead || 'Venta', notasCualificacion: args.notasCualificacion })
+        .catch((e: any) => console.error('[Resend]', e.message));
+    }
+  } else if (nombre === 'guardarConversacion' && !conversacionGuardada && args.docId?.length >= 20) {
+    await actualizarHistorial(args.docId, args.mensajeUsuario, args.respuestaAgente);
+  }
+
+  return resultado;
+}
+
 export async function POST(req: Request) {
   if (!isAuthorized(req)) {
     return new Response(JSON.stringify({ error: 'No autorizado.' }), { status: 401 });
   }
 
   let body: any;
-  try { body = await req.json(); } catch {
+  try {
+    body = await req.json();
+  } catch {
     return new Response(JSON.stringify({ error: 'Body inválido.' }), { status: 400 });
   }
 
   const { messages: incomingMessages } = body;
   const apiKey = process.env.NVIDIA_API_KEY;
-  if (!apiKey) return new Response(JSON.stringify({ error: 'Falta NVIDIA_API_KEY.' }), { status: 500 });
+  if (!apiKey) {
+    return new Response(JSON.stringify({ error: 'Falta NVIDIA_API_KEY.' }), { status: 500 });
+  }
 
   const requestId = crypto.randomUUID().slice(0, 8);
   const ultimoMensaje = incomingMessages[incomingMessages.length - 1]?.content || '';
@@ -65,86 +90,57 @@ export async function POST(req: Request) {
     let crmNotificado = false;
     let conversacionGuardada = false;
 
-    // RONDA 1: Primera llamada a NVIDIA
+    // RONDA 1
     const msg1 = await llamarNvidia(messages, apiKey);
     messages.push(msg1);
     if (msg1.content) respuestaFinal = msg1.content;
 
-    // Procesar tool calls de ronda 1 en paralelo
     if (msg1.tool_calls?.length > 0) {
-      const toolPromises = msg1.tool_calls.map(async (toolCall: any) => {
-        const nombre = toolCall.function.name;
-        const args = JSON.parse(toolCall.function.arguments);
-        console.log(`[${requestId}] Tool: ${nombre}`, JSON.stringify(args));
+      const toolResults = await Promise.all(
+        msg1.tool_calls.map(async (toolCall: any) => {
+          const nombre = toolCall.function.name;
+          const args = JSON.parse(toolCall.function.arguments);
+          const resultado = await procesarToolCall(nombre, args, requestId, docId, crmNotificado, conversacionGuardada);
+          if (nombre === 'registrarCliente' && resultado.docId) docId = resultado.docId;
+          if (nombre === 'notificarLeadCRM') crmNotificado = true;
+          if (nombre === 'guardarConversacion') conversacionGuardada = true;
+          return { role: 'tool', tool_call_id: toolCall.id, content: JSON.stringify(resultado) };
+        })
+      );
+      toolResults.forEach((r: any) => messages.push(r));
 
-        let resultado: any;
-        if (nombre === 'registrarCliente') {
-          resultado = await prepararEntornoCliente(args.nombreCliente, args.tipoLead);
-          if (resultado.docId) docId = resultado.docId;
-        } else if (nombre === 'buscarPropiedades') {
-          resultado = await searchPropertiesInSupabase({ urbanizacion: args.zona, municipioDeducido: args.zona, precioMax: args.precioMax });
-        } else if (nombre === 'notificarLeadCRM' && !crmNotificado) {
-          crmNotificado = true;
-          resultado = await sendCrmLeadNotification(args);
-          if (resultado.success) {
-            notificarEnrique({ nombre: args.nombre, contacto: args.contacto, presupuesto: args.presupuesto, zona: args.zona, tipoLead: args.tipoLead || 'Venta', notasCualificacion: args.notasCualificacion })
-              .catch((e: any) => console.error('[Resend]', e.message));
-          }
-        } else if (nombre === 'guardarConversacion' && !conversacionGuardada && args.docId?.length >= 20) {
-          conversacionGuardada = true;
-          await actualizarHistorial(args.docId, args.mensajeUsuario, args.respuestaAgente);
-          resultado = { success: true };
-        } else {
-          resultado = { success: true };
-        }
-
-        return { role: 'tool', tool_call_id: toolCall.id, content: JSON.stringify(resultado) };
-      });
-
-      const toolResults = await Promise.all(toolPromises);
-      toolResults.forEach(r => messages.push(r));
-
-      // RONDA 2: Segunda llamada con resultados de tools
+      // RONDA 2
       const msg2 = await llamarNvidia(messages, apiKey);
       messages.push(msg2);
       if (msg2.content) respuestaFinal = msg2.content;
 
-      // Procesar tool calls de ronda 2 (principalmente guardarConversacion y notificarLeadCRM)
       if (msg2.tool_calls?.length > 0) {
         for (const toolCall of msg2.tool_calls) {
           const nombre = toolCall.function.name;
           const args = JSON.parse(toolCall.function.arguments);
-          console.log(`[${requestId}] Tool R2: ${nombre}`, JSON.stringify(args));
-
-          if (nombre === 'notificarLeadCRM' && !crmNotificado) {
-            crmNotificado = true;
-            const resultado = await sendCrmLeadNotification(args);
-            if (resultado.success) {
-              notificarEnrique({ nombre: args.nombre, contacto: args.contacto, presupuesto: args.presupuesto, zona: args.zona, tipoLead: args.tipoLead || 'Venta', notasCualificacion: args.notasCualificacion })
-                .catch((e: any) => console.error('[Resend]', e.message));
-            }
-          } else if (nombre === 'guardarConversacion' && !conversacionGuardada && args.docId?.length >= 20) {
-            conversacionGuardada = true;
-            await actualizarHistorial(args.docId, args.mensajeUsuario, args.respuestaAgente);
-          }
+          const resultado = await procesarToolCall(nombre, args, requestId, docId, crmNotificado, conversacionGuardada);
+          if (nombre === 'registrarCliente' && resultado.docId) docId = resultado.docId;
+          if (nombre === 'notificarLeadCRM') crmNotificado = true;
+          if (nombre === 'guardarConversacion') conversacionGuardada = true;
+          messages.push({ role: 'tool', tool_call_id: toolCall.id, content: JSON.stringify(resultado) });
         }
       }
     }
 
-    // Notificar si detectamos email/teléfono y no se notificó
+    // Auto-detectar contacto y notificar si el modelo no lo hizo
+    if (!crmNotificado) {
       const emailMatch = ultimoMensaje.match(/[\w.-]+@[\w.-]+\.[a-z]{2,}/i);
       const phoneMatch = ultimoMensaje.match(/\+?[\d\s]{9,}/);
-      const nombreMatch = ultimoMensaje.match(/(?:soy|me llamo)\s+([\w\s]{3,30}?)(?:,|\.|\s+(?:busco|quiero|mi))/i);
-      const presupuestoMatch = ultimoMensaje.match(/(\d+)\s*(?:millones?|M€|M eur)/i);
-      
+      const nombreMatch = ultimoMensaje.match(/(?:soy|me llamo)\s+([\w\s]{3,30}?)(?:,|\.|quiero|busco|mi\s)/i);
+      const presupuestoMatch = ultimoMensaje.match(/(\d+)\s*(?:millones?|M€)/i);
+
       if ((emailMatch || phoneMatch) && nombreMatch) {
-        const contacto = emailMatch?.[0] || phoneMatch?.[0] || '';
-        const nombre = nombreMatch?.[1]?.trim() || 'Cliente';
+        const contacto = emailMatch?.[0] || phoneMatch?.[0]?.trim() || '';
+        const nombre = nombreMatch[1]?.trim() || 'Cliente';
         const presupuesto = presupuestoMatch ? parseInt(presupuestoMatch[1]) * 1_000_000 : undefined;
-        
-        console.log(`[auto-crm] Detectado lead: ${nombre} / ${contacto}`);
+        console.log(`[${requestId}] auto-crm: ${nombre} / ${contacto}`);
         sendCrmLeadNotification({ nombre, contacto, presupuesto, notasCualificacion: ultimoMensaje.slice(0, 300), tipoLead: 'Venta' })
-          .then(r => {
+          .then((r: any) => {
             if (r.success) {
               notificarEnrique({ nombre, contacto, presupuesto, tipoLead: 'Venta', notasCualificacion: ultimoMensaje.slice(0, 300) })
                 .catch((e: any) => console.error('[Resend]', e.message));
@@ -153,21 +149,21 @@ export async function POST(req: Request) {
       }
     }
 
-    // Auto-log si no se guardó
+    // Auto-log
     if (docId && respuestaFinal && !conversacionGuardada) {
       actualizarHistorial(docId, ultimoMensaje, respuestaFinal).catch(() => {});
     }
 
-    return new Response(JSON.stringify({ success: true, message: respuestaFinal, docId, requestId }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return new Response(
+      JSON.stringify({ success: true, message: respuestaFinal, docId, requestId }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } }
+    );
 
   } catch (error: any) {
     console.error(`[${requestId}] Error:`, error.message);
-    return new Response(JSON.stringify({ success: false, error: error.message, requestId }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return new Response(
+      JSON.stringify({ success: false, error: error.message, requestId }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
+    );
   }
 }
