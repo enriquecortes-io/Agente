@@ -77,6 +77,34 @@ export async function POST(req: Request) {
       ...incomingMessages.map((m: any) => ({ role: m.role, content: m.content })),
     ];
 
+    // Detectar zona y presupuesto del mensaje para búsqueda directa
+    const zonaMatch = ultimoMensaje.match(/(?:en|zona|área)s+([A-ZÁÉÍÓÚÑa-záéíóúñ][ws]{2,30}?)(?:,|.|con|y|mi)/i);
+    const zonaDirecta = zonaMatch?.[1]?.trim() || null;
+    const presupuestoDirecto = contacto.presupuesto;
+
+    // Búsqueda directa si tenemos zona o presupuesto — sin depender del modelo
+    if (zonaDirecta || presupuestoDirecto) {
+      console.log(`[${requestId}] búsqueda directa: ${zonaDirecta} / ${presupuestoDirecto}`);
+      const resultadoBusqueda = await searchPropertiesInSupabase({
+        urbanizacion: zonaDirecta || undefined,
+        municipioDeducido: zonaDirecta || undefined,
+        precioMax: presupuestoDirecto || undefined,
+      });
+      if (resultadoBusqueda.propiedades?.length > 0) {
+        const respuesta = construirRespuesta(resultadoBusqueda.propiedades, contacto.nombre, zonaDirecta);
+        // Registrar cliente async
+        if (contacto.nombre) {
+          prepararEntornoCliente(contacto.nombre, 'Venta')
+            .then(r => { if (r.docId) actualizarHistorial(r.docId, ultimoMensaje, respuesta).catch(() => {}); })
+            .catch(() => {});
+        }
+        return new Response(
+          JSON.stringify({ success: true, message: respuesta, docId: null, requestId }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+
     // UNA sola llamada a NVIDIA
     const res = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
       method: 'POST',
