@@ -135,3 +135,13 @@ cat > /workspaces/Agente/PENDIENTE.txt << 'EOF'
   2. Conexión a The Edit Marbella — impacto crítico / esfuerzo medio
   3. Deuda técnica [12] — limpieza rápida, 30 min
 ═══════════════════════════════════════════════════════════════════
+
+[✅] Notificación a Enrique via Resend — operativo en producción
+     - Webhook Supabase → /api/notify → Resend
+     - from: onboarding@resend.dev (pendiente verificar dominio theeditmarbella.com)
+     - Detecta nombre + email/teléfono automáticamente del mensaje
+
+[→] PRÓXIMA SESIÓN:
+     - Verificar dominio en Resend para emails desde harvis@theeditmarbella.com
+     - Conectar chat widget en The Edit Marbella
+     - Arreglar message vacío en respuesta del endpoint
