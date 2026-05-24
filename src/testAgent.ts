@@ -88,9 +88,10 @@ async function testAgenteDirecto(mensaje = 'Hola, soy Carlos García, busco una 
   const matchNombre = mensaje.match(/(?:soy|me llamo|habla|es)\s+([A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+){0,2})(?:\s+de\s+nuevo|\s+otra\s+vez|,|\.|$)/i);
   const nombreDetectado = matchNombre?.[1];
 
-  let contextoMemoria = '';
+  let historialPrevio: any[] = [];
   if (nombreDetectado) {
     const { turnos } = await recuperarHistorialCliente(nombreDetectado, 5);
+    historialPrevio = turnos || [];
     if (turnos && turnos.length > 0) {
       console.log(`  🧠 ${turnos.length} turnos previos de ${nombreDetectado} cargados`);
       contextoMemoria = '\n\n# HISTORIAL PREVIO CON ESTE CLIENTE\n' +
@@ -110,13 +111,10 @@ async function testAgenteDirecto(mensaje = 'Hola, soy Carlos García, busco una 
     { type: 'function', function: { name: 'notificarLeadCRM', description: 'Registra lead en CRM.', parameters: { type: 'object', properties: { nombre: { type: 'string' }, contacto: { type: 'string' }, presupuesto: { type: 'number' }, notasCualificacion: { type: 'string' }, tipoLead: { type: 'string' } }, required: ['nombre','contacto','notasCualificacion'] } } },
   ];
 
-  // Inyectar historial como mensajes reales en lugar de en el system prompt
   const historialMensajes: any[] = [];
-  if (turnos && (turnos as any[]).length > 0) {
-    for (const t of (turnos as any[])) {
-      historialMensajes.push({ role: 'user', content: t.mensaje_usuario });
-      historialMensajes.push({ role: 'assistant', content: t.respuesta_agente });
-    }
+  for (const t of historialPrevio) {
+    historialMensajes.push({ role: 'user', content: t.mensaje_usuario });
+    historialMensajes.push({ role: 'assistant', content: t.respuesta_agente });
   }
 
   const messages: any[] = [
