@@ -85,7 +85,7 @@ async function testAgenteDirecto(mensaje = 'Hola, soy Carlos García, busco una 
   console.log(`\n💬 Usuario: "${mensaje}"\n`);
 
   // Detectar nombre para recuperar historial
-  const matchNombre = mensaje.match(/(?:soy|me llamo|habla|es)\s+([A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+)*)/i);
+  const matchNombre = mensaje.match(/(?:soy|me llamo|habla|es)\s+([A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+){0,2})(?:\s+de\s+nuevo|\s+otra\s+vez|,|\.|$)/i);
   const nombreDetectado = matchNombre?.[1];
 
   let contextoMemoria = '';
