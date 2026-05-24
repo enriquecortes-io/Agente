@@ -1,0 +1,113 @@
+═══════════════════════════════════════════════════════════════════
+ HARVIS — TAREAS PENDIENTES
+ Actualizado: 24/05/2026
+═══════════════════════════════════════════════════════════════════
+
+
+─── PRIORIDAD ALTA ───────────────────────────────────────────────
+
+[1] MEMORIA PERSISTENTE ENTRE SESIONES
+   - Antes de responder, leer historial del cliente del doc maestro
+   - Reconocer cliente recurrente por nombre o contacto
+   - Cargar últimos N turnos previos como contexto en la llamada NVIDIA
+   - Convierte Harvis de chatbot a consultor personal real
+
+[2] NOTIFICACIÓN A ENRIQUE
+   - Cuando lead llega a: nombre + contacto + presupuesto + zona → 
+     mandar WhatsApp o email a Enrique con resumen
+   - Opciones: Twilio (WhatsApp), Resend (email), o webhook directo
+   - Sin esto, los leads se quedan en Supabase sin acción humana
+
+[3] CONEXIÓN A THE EDIT MARBELLA
+   - Chat widget en la home de mdlm-xi.vercel.app
+   - POST a /api/chat con x-agent-key
+   - Mantener historial en localStorage del navegador
+   - Sin canal real, el resto es teórico
+
+
+─── PRIORIDAD MEDIA ──────────────────────────────────────────────
+
+[4] CANALES ADICIONALES
+   - WhatsApp Business API (Twilio o Meta)
+   - Email entrante (parser de Gmail / Resend)
+   - Transcripción de llamadas (Whisper API)
+
+[5] CUALIFICACIÓN PROFUNDA
+   - Detectar timeline (¿cuándo quiere comprar?)
+   - Detectar urgencia y motivación de compra
+   - Identificar perfil: inversor / segunda residencia / reubicación
+   - Detectar nacionalidad y necesidades fiscales (NIE, golden visa)
+
+[6] ACCIONES DE CIERRE
+   - Agendar visitas en Google Calendar (event_create_v1)
+   - Enviar emails de seguimiento automatizados
+   - Generar NDAs personalizados en PDF
+   - Plantilla de presentación de propiedad personalizada por cliente
+
+[7] INTELIGENCIA COMERCIAL
+   - Priorizar leads por valor potencial (presupuesto × probabilidad)
+   - Detectar señales de pérdida de interés (silencio > X días)
+   - Cross-selling: mostrar villa de mayor precio si encaja el perfil
+   - Aprender qué propiedades convierten mejor (A/B implícito)
+
+[8] DATOS DEL CLIENTE
+   - Captura y validación KYC: pasaporte, NIE, certificado de fondos
+   - Validar formato de email y teléfono internacional
+   - Detectar duplicados: Carlos García vs C. García vs email
+   - Almacenar en Supabase con encriptación de campos sensibles
+
+[9] GESTIÓN DE CAPTACIÓN
+   - Recibe leads de captación pero no inicia proceso de valoración
+   - Solicitar fotos y documentos del vendedor
+   - Generar comparables automáticos (otras propiedades vendidas en zona)
+   - Estimar precio de salida según m², zona y estado
+
+
+─── PRIORIDAD BAJA / TÉCNICA ─────────────────────────────────────
+
+[10] OPERACIONALES
+   - Rate limiting por IP/usuario en /api/chat
+   - Métricas: tiempo de respuesta, leads convertidos, tools fallidos
+   - Logs estructurados (JSON) en lugar de console.log
+   - Fallback a Gemini si NVIDIA se cae
+
+[11] OBSERVABILIDAD
+   - Dashboard de conversaciones activas
+   - Alertas si tool calls fallan > N veces
+   - Análisis de sentimiento por conversación
+   - Coste por lead cualificado (tokens × precio)
+
+[12] DEUDA TÉCNICA ACTUAL
+   - testAgent.ts tiene `syncLogToDrive` importado pero ya no se usa
+   - webhookTools.ts: triggerCmsPropertyPublish no escribe en ningún sitio real
+   - escaneoModelos.ts y escaneoNvidia.ts pueden moverse a /scripts
+   - checkModels.ts es redundante con escaneoModelos.ts
+
+
+─── IDEAS A FUTURO ───────────────────────────────────────────────
+
+[13] FUNCIONES PREMIUM
+   - Generación de video tours con IA (Sora, Veo)
+   - Realidad aumentada: ver mobiliario en propiedad vacía
+   - Matching automático: nuevas propiedades → leads compatibles
+   - Reportes de mercado mensuales por zona enviados a inversores VIP
+
+[14] INTEGRACIONES EXTERNAS
+   - Idealista / Fotocasa: publicación automática
+   - Land Registry: verificar propiedad antes de listar
+   - Tasadora externa para validar precios
+   - Notarios: agenda de firma
+
+[15] COMPLIANCE
+   - GDPR: política de retención de datos
+   - AML/KYC: verificación automática vs listas sancionadas
+   - Logs de auditoría para todas las acciones sensibles
+
+
+═══════════════════════════════════════════════════════════════════
+ TOP 3 RECOMENDADOS PARA SIGUIENTE SESIÓN:
+ 
+ 1. Memoria persistente (impacto: alto / esfuerzo: medio)
+ 2. Notificación a Enrique (impacto: alto / esfuerzo: bajo)  
+ 3. Conexión a The Edit (impacto: crítico / esfuerzo: medio)
+═══════════════════════════════════════════════════════════════════
