@@ -1,26 +1,44 @@
-import { generateText } from 'ai';
-import { createOpenAI } from '@ai-sdk/openai';
 import { searchPropertiesInSupabase } from './tools/supabaseTools.js';
 import { createClientFolder } from './tools/googleDriveTools.js';
 import dotenv from 'dotenv';
 
 dotenv.config({ path: '.env.local' });
 
-// 🔥 EL HACK: Definimos nosotros el tipo para que TypeScript se calle la boca
-type CoreMessage = {
-  role: 'user' | 'assistant' | 'system';
-  content: string;
-};
+const NVIDIA_API_KEY = process.env.NVIDIA_API_KEY || '';
+const MODELO = 'meta/llama-3.1-8b-instruct';
 
-// 🧠 CONEXIÓN A NVIDIA NIM Pura
-const nvidia = createOpenAI({
-  baseURL: 'https://integrate.api.nvidia.com/v1',
-  apiKey: process.env.NVIDIA_API_KEY || '',
-});
+type Mensaje = { role: string; content: string };
+let historialChat: Mensaje[] = [];
 
-const modeloNvidia = nvidia('meta/llama-3.1-8b-instruct');
+// 🪓 EL MACHETAZO FINAL: Fetch puro sin librerías de Vercel
+async function llamarNvidiaPuro(systemPrompt: string, mensajesUsuario: Mensaje[], temperatura: number) {
+  const mensajes = [
+    { role: 'system', content: systemPrompt },
+    ...mensajesUsuario
+  ];
 
-let historialChat: CoreMessage[] = [];
+  const respuesta = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${NVIDIA_API_KEY}`
+    },
+    body: JSON.stringify({
+      model: MODELO,
+      messages: mensajes,
+      temperature: temperatura,
+      max_tokens: 1024
+    })
+  });
+
+  if (!respuesta.ok) {
+    const errorBody = await respuesta.text();
+    throw new Error(`HTTP ${respuesta.status} - ${errorBody}`);
+  }
+
+  const datos = await respuesta.json();
+  return datos.choices[0].message.content;
+}
 
 async function hablarConHarvis(mensajeCliente: string) {
   console.log(`\n╔═════════════════════════════════════════════════════════════════════════`);
@@ -30,7 +48,7 @@ async function hablarConHarvis(mensajeCliente: string) {
   historialChat.push({ role: 'user', content: mensajeCliente });
 
   try {
-    // --- FASE 1: PENSAR ---
+    // --- FASE 1: PENSAR (Fetch Puro) ---
     const promptExtractor = `
     Eres un analizador de datos. Tu ÚNICA salida debe ser un objeto JSON válido, sin texto adicional, sin formato markdown, SOLO el JSON.
     Reglas: Deduce municipios de España (Zagaleta=Benahavis, Sotogrande=San Roque). Quédate con el presupuesto más alto en números puros.
@@ -51,16 +69,10 @@ async function hablarConHarvis(mensajeCliente: string) {
     }
     `;
 
-    const { text: respuestaCruda } = await generateText({
-      model: modeloNvidia,
-      temperature: 0,
-      system: promptExtractor,
-      messages: historialChat
-    });
-
+    const respuestaCruda = await llamarNvidiaPuro(promptExtractor, historialChat, 0);
     const jsonLimpio = respuestaCruda.replace(/```json/g, '').replace(/```/g, '').trim();
-    let intencion;
     
+    let intencion;
     try {
       intencion = JSON.parse(jsonLimpio);
     } catch (parseError) {
@@ -87,7 +99,7 @@ async function hablarConHarvis(mensajeCliente: string) {
       contextoDrive = await createClientFolder(d.nombreCliente, d.tipoInteraccion);
     }
 
-    // --- FASE 3: RESPONDER ---
+    // --- FASE 3: RESPONDER (Fetch Puro) ---
     const promptDeVenta = `
     Eres Harvis, broker inmobiliario de superlujo. 
     Resultado de la base de datos: ${JSON.stringify(contextoSupabase)}
@@ -100,14 +112,9 @@ async function hablarConHarvis(mensajeCliente: string) {
     Responde SIEMPRE de forma concisa y elegante en el idioma del usuario.
     `;
 
-    const { text: respuestaFinal } = await generateText({
-      model: modeloNvidia,
-      temperature: 0.7,
-      system: promptDeVenta,
-      messages: historialChat
-    });
+    const respuestaFinal = await llamarNvidiaPuro(promptDeVenta, historialChat, 0.7);
 
-    console.log(`\n🤖 AGENTE HARVIS (NVIDIA Manual Bypass):`);
+    console.log(`\n🤖 AGENTE HARVIS (NVIDIA Raw Fetch):`);
     console.log(`─────────────────────────────────────────────────────────────────────────`);
     console.log(respuestaFinal);
     console.log(`─────────────────────────────────────────────────────────────────────────\n`);
@@ -115,7 +122,7 @@ async function hablarConHarvis(mensajeCliente: string) {
     historialChat.push({ role: 'assistant', content: respuestaFinal });
 
   } catch (error: any) {
-    console.error('❌ Error Salvaje:', error.message || error);
+    console.error('❌ Error Salvaje (Fetch API):', error.message || error);
   }
 }
 
