@@ -113,3 +113,52 @@ export async function searchPropertiesInSupabase(args: SearchArgs) {
     return { success: false, error: error.message };
   }
 }
+
+// ─── Memoria persistente ──────────────────────────────────────────────────────
+
+interface ConversacionInsert {
+  clienteNombre: string;
+  clienteContacto?: string;
+  tipoLead?: 'Venta' | 'Captacion' | 'Gestion';
+  mensajeUsuario: string;
+  respuestaAgente: string;
+  propiedadesMostradas?: string[];
+}
+
+export async function guardarConversacionSupabase(data: ConversacionInsert) {
+  try {
+    const { error } = await supabase.from('conversaciones').insert({
+      cliente_nombre: data.clienteNombre,
+      cliente_contacto: data.clienteContacto,
+      tipo_lead: data.tipoLead,
+      mensaje_usuario: data.mensajeUsuario,
+      respuesta_agente: data.respuestaAgente,
+      propiedades_mostradas: data.propiedadesMostradas ?? null,
+    });
+    if (error) throw new Error(error.message);
+    console.log(`[Supabase] Conversación de ${data.clienteNombre} guardada`);
+    return { success: true };
+  } catch (error: any) {
+    console.error('[Supabase] Error guardando conversación:', error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function recuperarHistorialCliente(nombreCliente: string, limite: number = 10) {
+  try {
+    const { data, error } = await supabase
+      .from('conversaciones')
+      .select('mensaje_usuario, respuesta_agente, tipo_lead, propiedades_mostradas, created_at')
+      .ilike('cliente_nombre', `%${nombreCliente}%`)
+      .order('created_at', { ascending: false })
+      .limit(limite);
+
+    if (error) throw new Error(error.message);
+    const turnos = (data || []).reverse();
+    console.log(`[Supabase] ${turnos.length} turnos previos de ${nombreCliente}`);
+    return { success: true, turnos };
+  } catch (error: any) {
+    console.error('[Supabase] Error recuperando historial:', error.message);
+    return { success: false, error: error.message, turnos: [] };
+  }
+}
