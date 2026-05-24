@@ -1,52 +1,38 @@
 ═══════════════════════════════════════════════════════════════════
   HARVIS — TAREAS PENDIENTES
-  Actualizado: 24/05/2026
+  Actualizado: 25/05/2026
 ═══════════════════════════════════════════════════════════════════
+
+
+─── COMPLETADO ───────────────────────────────────────────────────
+
+[✅] Memoria persistente entre sesiones (Supabase)
+[✅] Clasificación Venta/Captacion/Gestion
+[✅] Deduplicación de leads en Supabase
+[✅] Deduplicación de carpetas en Drive
+[✅] URLs de The Edit Marbella en resultados
+[✅] Notificación a Enrique via Resend
+     - Webhook Supabase → /api/notify → Resend
+     - from: onboarding@resend.dev
+     - Pendiente: verificar dominio theeditmarbella.com en Resend
+[✅] Modelo: meta/llama-3.3-70b-instruct (NVIDIA NIM)
+[✅] Endpoint /api/chat en producción (harvis-six.vercel.app)
 
 
 ─── PRIORIDAD ALTA ───────────────────────────────────────────────
 
-[✅ HECHO] MEMORIA PERSISTENTE ENTRE SESIONES
-   - Historial guardado en Supabase tabla conversaciones
-   - Recuperación de últimos 5 turnos por nombre de cliente
-   - Inyectado como mensajes reales en el contexto de NVIDIA
-   - Modelo: meta/llama-3.3-70b-instruct
-
-[2] NOTIFICACIÓN A ENRIQUE
-   - Cuando lead llega a: nombre + contacto + presupuesto + zona →
-     mandar WhatsApp o email a Enrique con resumen
-   - Opciones: Twilio (WhatsApp), Resend (email), o webhook directo
-   - Sin esto, los leads se quedan en Supabase sin acción humana
-
-[3] CONEXIÓN A THE EDIT MARBELLA
-   - Chat widget en la home de mdlm-
-
-cat > /workspaces/Agente/PENDIENTE.txt << 'EOF'
-═══════════════════════════════════════════════════════════════════
-  HARVIS — TAREAS PENDIENTES
-  Actualizado: 24/05/2026
-═══════════════════════════════════════════════════════════════════
-
-
-─── PRIORIDAD ALTA ───────────────────────────────────────────────
-
-[✅ HECHO] MEMORIA PERSISTENTE ENTRE SESIONES
-   - Historial guardado en Supabase tabla conversaciones
-   - Recuperación de últimos 5 turnos por nombre de cliente
-   - Inyectado como mensajes reales en el contexto de NVIDIA
-   - Modelo: meta/llama-3.3-70b-instruct
-
-[2] NOTIFICACIÓN A ENRIQUE
-   - Cuando lead llega a: nombre + contacto + presupuesto + zona →
-     mandar WhatsApp o email a Enrique con resumen
-   - Opciones: Twilio (WhatsApp), Resend (email), o webhook directo
-   - Sin esto, los leads se quedan en Supabase sin acción humana
-
-[3] CONEXIÓN A THE EDIT MARBELLA
-   - Chat widget en la home de mdlm-xi.vercel.app
+[1] CONEXIÓN A THE EDIT MARBELLA
+   - Chat widget en mdlm-xi.vercel.app
    - POST a /api/chat con x-agent-key
    - Mantener historial en localStorage del navegador
-   - Sin canal real, el resto es teórico
+
+[2] ARREGLAR MESSAGE VACÍO EN RESPUESTA
+   - El endpoint devuelve message: "" cuando NVIDIA hace tool calls
+   - Necesita construir respuesta con los resultados de las tools
+
+[3] VERIFICAR DOMINIO EN RESEND
+   - Añadir theeditmarbella.com en resend.com/domains
+   - Emails desde harvis@theeditmarbella.com en lugar de onboarding@resend.dev
 
 
 ─── PRIORIDAD MEDIA ──────────────────────────────────────────────
@@ -66,82 +52,63 @@ cat > /workspaces/Agente/PENDIENTE.txt << 'EOF'
    - Agendar visitas en Google Calendar
    - Enviar emails de seguimiento automatizados
    - Generar NDAs personalizados en PDF
-   - Plantilla de presentación de propiedad personalizada por cliente
+   - Presentación de propiedad personalizada por cliente
 
 [7] INTELIGENCIA COMERCIAL
    - Priorizar leads por valor potencial (presupuesto × probabilidad)
    - Detectar señales de pérdida de interés (silencio > X días)
    - Cross-selling: mostrar villa de mayor precio si encaja el perfil
-   - Aprender qué propiedades convierten mejor (A/B implícito)
 
 [8] DATOS DEL CLIENTE
    - Captura y validación KYC: pasaporte, NIE, certificado de fondos
    - Validar formato de email y teléfono internacional
-   - Detectar duplicados: Carlos García vs C. García vs email
-   - Almacenar en Supabase con encriptación de campos sensibles
+   - Detectar duplicados por email
 
 [9] GESTIÓN DE CAPTACIÓN
-   - Recibe leads de captación pero no inicia proceso de valoración
+   - Iniciar proceso de valoración para leads captación
    - Solicitar fotos y documentos del vendedor
-   - Generar comparables automáticos (otras propiedades vendidas en zona)
-   - Estimar precio de salida según m², zona y estado
+   - Generar comparables automáticos
 
 
 ─── PRIORIDAD BAJA / TÉCNICA ─────────────────────────────────────
 
 [10] OPERACIONALES
    - Rate limiting por IP/usuario en /api/chat
-   - Métricas: tiempo de respuesta, leads convertidos, tools fallidos
-   - Logs estructurados (JSON) en lugar de console.log
    - Fallback a Gemini si NVIDIA se cae
+   - Logs estructurados (JSON)
 
-[11] OBSERVABILIDAD
+[11] DEUDA TÉCNICA
+   - syncLogToDrive en testAgent sin uso → eliminar
+   - triggerCmsPropertyPublish sin destino real
+   - escaneoModelos.ts + escaneoNvidia.ts → mover a /scripts
+   - checkModels.ts redundante
+
+[12] OBSERVABILIDAD
    - Dashboard de conversaciones activas
-   - Alertas si tool calls fallan > N veces
-   - Análisis de sentimiento por conversación
    - Coste por lead cualificado (tokens × precio)
-
-[12] DEUDA TÉCNICA ACTUAL
-   - syncLogToDrive importado en testAgent pero ya no se usa → eliminar
-   - webhookTools.ts: triggerCmsPropertyPublish sin destino real
-   - escaneoModelos.ts y escaneoNvidia.ts → mover a /scripts
-   - checkModels.ts redundante con escaneoModelos.ts
 
 
 ─── IDEAS A FUTURO ───────────────────────────────────────────────
 
 [13] FUNCIONES PREMIUM
-   - Generación de video tours con IA (Sora, Veo)
-   - Realidad aumentada: ver mobiliario en propiedad vacía
    - Matching automático: nuevas propiedades → leads compatibles
-   - Reportes de mercado mensuales por zona enviados a inversores VIP
+   - Reportes de mercado mensuales para inversores VIP
+   - Realidad aumentada: ver mobiliario en propiedad vacía
 
 [14] INTEGRACIONES EXTERNAS
    - Idealista / Fotocasa: publicación automática
-   - Land Registry: verificar propiedad antes de listar
    - Tasadora externa para validar precios
    - Notarios: agenda de firma
 
 [15] COMPLIANCE
    - GDPR: política de retención de datos
    - AML/KYC: verificación automática vs listas sancionadas
-   - Logs de auditoría para todas las acciones sensibles
 
 
 ═══════════════════════════════════════════════════════════════════
-  TOP 3 PARA SIGUIENTE SESIÓN:
+  TOP 3 PRÓXIMA SESIÓN:
 
-  1. Notificación a Enrique — impacto alto / esfuerzo bajo
-  2. Conexión a The Edit Marbella — impacto crítico / esfuerzo medio
-  3. Deuda técnica [12] — limpieza rápida, 30 min
+  1. Conectar chat widget en The Edit Marbella
+  2. Arreglar message vacío en respuesta del endpoint
+  3. Verificar dominio theeditmarbella.com en Resend
 ═══════════════════════════════════════════════════════════════════
-
-[✅] Notificación a Enrique via Resend — operativo en producción
-     - Webhook Supabase → /api/notify → Resend
-     - from: onboarding@resend.dev (pendiente verificar dominio theeditmarbella.com)
-     - Detecta nombre + email/teléfono automáticamente del mensaje
-
-[→] PRÓXIMA SESIÓN:
-     - Verificar dominio en Resend para emails desde harvis@theeditmarbella.com
-     - Conectar chat widget en The Edit Marbella
-     - Arreglar message vacío en respuesta del endpoint
