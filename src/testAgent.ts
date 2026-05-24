@@ -43,9 +43,9 @@ async function hablarConHarvis(mensajeCliente: string) {
   historialChat.push({ role: 'user', content: mensajeCliente });
 
   try {
-    // --- FASE 1: PENSAR ---
+    // --- FASE 1: PENSAR (Context Boxing para que no alucine) ---
     const promptExtractor = `
-    Eres un analizador de datos. Salida: ÚNICO objeto JSON válido. NO digas nada más, NO uses markdown.
+    Eres un sistema de backend puro. Tu ÚNICA salida debe ser un objeto JSON válido. NO respondas como humano.
     Reglas: Deduce municipios de España (Zagaleta=Benahavis).
     Estructura OBLIGATORIA:
     {
@@ -56,17 +56,23 @@ async function hablarConHarvis(mensajeCliente: string) {
     }
     `;
 
-    const respuestaCruda = await llamarNvidiaPuro(promptExtractor, historialChat, 0);
+    // Metemos todo el historial en una caja de texto para aislar a la IA
+    const textoHistorial = historialChat.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n');
+    const mensajeEnCaja: Mensaje[] = [{ 
+      role: 'user', 
+      content: `Extrae el JSON basándote en esta conversación:\n\n${textoHistorial}` 
+    }];
+
+    const respuestaCruda = await llamarNvidiaPuro(promptExtractor, mensajeEnCaja, 0);
     
     let intencion;
     try {
-      // Magia negra: extraemos SOLO lo que esté entre la primera llave { y la última }
       const match = respuestaCruda.match(/\{[\s\S]*\}/);
       const jsonLimpio = match ? match[0] : respuestaCruda;
       intencion = JSON.parse(jsonLimpio);
     } catch (e: any) {
       console.error(`    [❌ ERROR JSON] El modelo no devolvió JSON puro. Respuesta del modelo:\n`, respuestaCruda);
-      return; // Salimos, pero ahora SÍ sabemos por qué ha fallado
+      return;
     }
 
     let contextoSupabase = null;
@@ -89,7 +95,7 @@ async function hablarConHarvis(mensajeCliente: string) {
       }
     }
 
-    // --- FASE 3: RESPONDER ---
+    // --- FASE 3: RESPONDER (Aquí sí le pasamos el historial normal) ---
     const promptDeVenta = `
     Eres Harvis, broker inmobiliario de superlujo. 
     DB: ${JSON.stringify(contextoSupabase)}

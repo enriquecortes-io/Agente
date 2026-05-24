@@ -1,13 +1,14 @@
 import { google } from 'googleapis';
 
 const getDriveService = () => {
+  // Le forzamos a buscar las credenciales como debe hacerlo tu otro archivo
   const auth = new google.auth.GoogleAuth({
+    keyFile: process.env.GOOGLE_APPLICATION_CREDENTIALS || './credentials.json',
     scopes: ['https://www.googleapis.com/auth/drive']
   });
   return google.drive({ version: 'v3', auth });
 };
 
-// 📂 Busca la carpeta del cliente. Si no existe, la crea. Cero duplicados.
 export async function getOrCreateClientFolder(nombreCliente: string) {
   const drive = getDriveService();
   const folderName = `Cliente - ${nombreCliente}`;
@@ -38,7 +39,6 @@ export async function getOrCreateClientFolder(nombreCliente: string) {
   }
 }
 
-// 📝 Descarga el log actual, le añade el nuevo texto y lo actualiza
 export async function appendToLogFile(folderId: string, newText: string) {
   const drive = getDriveService();
   try {
@@ -51,7 +51,6 @@ export async function appendToLogFile(folderId: string, newText: string) {
     let currentText = '';
 
     if (fileId) {
-      // Si existe, leemos lo que ya hay escrito
       const fileData = await drive.files.get({ fileId, alt: 'media' }, { responseType: 'text' });
       currentText = (fileData.data as string) + '\n\n';
     }
