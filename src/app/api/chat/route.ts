@@ -114,6 +114,28 @@ export async function POST(req: Request) {
         ).join('\n\n');
       }
 
+      // Si no hay respuesta de texto, hacer segunda llamada para generarla
+        messages.push(assistantMsg);
+        assistantMsg.tool_calls.forEach((tc: any, i: number) => {
+          messages.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify(toolResults[i]) });
+        });
+
+        const res2 = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: 'meta/llama-3.3-70b-instruct',
+            messages,
+            max_tokens: 800,
+            temperature: 0.4,
+          }),
+        });
+        if (res2.ok) {
+          const data2 = await res2.json();
+          respuestaFinal = data2.choices?.[0]?.message?.content || '';
+        }
+      }
+
       // Auto-log async
       if (docId) {
         actualizarHistorial(docId, ultimoMensaje, respuestaFinal).catch(() => {});
