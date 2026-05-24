@@ -22,6 +22,10 @@ function header(title: string) {
   console.log(SEP);
 }
 
+function esDocIdValido(docId: string): boolean {
+  return typeof docId === 'string' && docId.length >= 20 && !docId.toLowerCase().includes('docid');
+}
+
 async function testSupabase() {
   header('Supabase — Búsqueda de propiedades');
   log('La Zagaleta 5M€', await searchPropertiesInSupabase({ urbanizacion: 'La Zagaleta', municipioDeducido: 'Benahavís', precioMax: 5_000_000 }));
@@ -55,12 +59,14 @@ async function cleanupDrive() {
 
 async function ejecutarTool(nombre: string, args: any, clienteNombre?: string): Promise<any> {
   console.log(`  [Tool] ${nombre} →`, JSON.stringify(args));
+
   switch (nombre) {
     case 'registrarCliente':
       return await prepararEntornoCliente(args.nombreCliente, args.tipoLead);
+
     case 'guardarConversacion':
-      // Rechazar docIds inventados — deben ser strings largos de Google Docs
-        console.log('  [⚠️ IGNORADO] docId inválido — Harvis debe llamar registrarCliente primero');
+      if (!esDocIdValido(args.docId)) {
+        console.log(`  [⚠️ BLOQUEADO] docId inválido: "${args.docId}" — necesita registrarCliente primero`);
         return { success: false, error: 'docId inválido. Llama registrarCliente primero para obtener el docId real.' };
       }
       await actualizarHistorial(args.docId, args.mensajeUsuario, args.respuestaAgente);
@@ -71,10 +77,17 @@ async function ejecutarTool(nombre: string, args: any, clienteNombre?: string): 
         respuestaAgente: args.respuestaAgente,
       });
       return { success: true };
+
     case 'buscarPropiedades':
-      return await searchPropertiesInSupabase({ urbanizacion: args.zona, municipioDeducido: args.zona, precioMax: args.precioMax });
+      return await searchPropertiesInSupabase({
+        urbanizacion: args.zona,
+        municipioDeducido: args.zona,
+        precioMax: args.precioMax,
+      });
+
     case 'notificarLeadCRM':
       return await sendCrmLeadNotification(args);
+
     default:
       return { error: `Tool desconocida: ${nombre}` };
   }
@@ -88,11 +101,9 @@ async function testAgenteDirecto(mensaje = 'Hola, soy Carlos García, busco una 
 
   console.log(`\n💬 Usuario: "${mensaje}"\n`);
 
-  // Detectar nombre para recuperar historial
   const matchNombre = mensaje.match(/(?:soy|me llamo|habla|es)\s+([A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+){0,2})(?:\s+de\s+nuevo|\s+otra\s+vez|,|\.|$)/i);
   const nombreDetectado = matchNombre?.[1];
 
-  // Recuperar historial previo y construir mensajes de contexto
   const historialMensajes: any[] = [];
   if (nombreDetectado) {
     const { turnos } = await recuperarHistorialCliente(nombreDetectado, 5);
@@ -109,13 +120,12 @@ async function testAgenteDirecto(mensaje = 'Hola, soy Carlos García, busco una 
   }
 
   const tools = [
-    { type: 'function', function: { name: 'registrarCliente', description: 'Registra al cliente en Drive.', parameters: { type: 'object', properties: { nombreCliente: { type: 'string' }, tipoLead: { type: 'string', enum: ['Venta','Captacion','Gestion'] } }, required: ['nombreCliente','tipoLead'] } } },
-    { type: 'function', function: { name: 'guardarConversacion', description: 'Guarda el turno en Drive y Supabase. SIEMPRE llama esto tras responder.', parameters: { type: 'object', properties: { docId: { type: 'string' }, clienteNombre: { type: 'string' }, tipoLead: { type: 'string' }, mensajeUsuario: { type: 'string' }, respuestaAgente: { type: 'string' } }, required: ['docId','mensajeUsuario','respuestaAgente'] } } },
+    { type: 'function', function: { name: 'registrarCliente', description: 'Registra al cliente en Drive. Llama esto SIEMPRE al inicio de cada conversación para obtener el docId real.', parameters: { type: 'object', properties: { nombreCliente: { type: 'string' }, tipoLead: { type: 'string', enum: ['Venta','Captacion','Gestion'] } }, required: ['nombreCliente','tipoLead'] } } },
+    { type: 'function', function: { name: 'guardarConversacion', description: 'Guarda el turno. Requiere el docId real de registrarCliente.', parameters: { type: 'object', properties: { docId: { type: 'string' }, clienteNombre: { type: 'string' }, tipoLead: { type: 'string' }, mensajeUsuario: { type: 'string' }, respuestaAgente: { type: 'string' } }, required: ['docId','mensajeUsuario','respuestaAgente'] } } },
     { type: 'function', function: { name: 'buscarPropiedades', description: 'Busca propiedades en Supabase.', parameters: { type: 'object', properties: { zona: { type: 'string' }, precioMax: { type: 'number' } } } } },
     { type: 'function', function: { name: 'notificarLeadCRM', description: 'Registra lead en CRM.', parameters: { type: 'object', properties: { nombre: { type: 'string' }, contacto: { type: 'string' }, presupuesto: { type: 'number' }, notasCualificacion: { type: 'string' }, tipoLead: { type: 'string' } }, required: ['nombre','contacto','notasCualificacion'] } } },
   ];
 
-  // Historial previo inyectado como mensajes reales — no en system prompt
   const messages: any[] = [
     { role: 'system', content: SYSTEM_PROMPT },
     ...historialMensajes,
@@ -158,7 +168,6 @@ async function testAgenteDirecto(mensaje = 'Hola, soy Carlos García, busco una 
       continue;
     }
 
-    // Auto-log final
     if (docId && ultimoTextoHarvis) {
       console.log(`\n  [Auto-log] Drive + Supabase`);
       await actualizarHistorial(docId, mensaje, ultimoTextoHarvis);
