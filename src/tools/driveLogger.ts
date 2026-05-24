@@ -1,20 +1,33 @@
 import { google } from 'googleapis';
-// Intentamos importar la configuración o el cliente si ya lo tienes creado en tus herramientas
-// para mantener el proyecto limpio y DRY (Don't Repeat Yourself)
+import dotenv from 'dotenv';
+
+// Nos aseguramos de que el logger también lea el .env.local
+dotenv.config({ path: '.env.local' });
 
 const getDriveService = () => {
-  // Si usas una variable de entorno, el SDK de Google la detecta automáticamente si está bien configurada
-  // Si no encuentra el archivo físico, delegamos en las credenciales por defecto del entorno
-  const config: any = {};
+  // Extraemos las credenciales directamente de las variables de entorno
+  // Asegúrate de que los nombres de estas variables coincidan con las tuyas en el .env.local
+  const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
   
-  if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-    config.keyFile = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+  // Limpiamos la clave privada por si viene con las comillas literales o saltos de línea escapados (\\n)
+  let privateKey = process.env.GOOGLE_PRIVATE_KEY;
+  if (privateKey) {
+    privateKey = privateKey.replace(/\\n/g, '\n');
   }
-  
+
+  if (!clientEmail || !privateKey) {
+     throw new Error("Faltan GOOGLE_CLIENT_EMAIL o GOOGLE_PRIVATE_KEY en tu .env.local");
+  }
+
+  // Inyectamos las credenciales manualmente (sin archivo JSON)
   const auth = new google.auth.GoogleAuth({
-    ...config,
+    credentials: {
+      client_email: clientEmail,
+      private_key: privateKey,
+    },
     scopes: ['https://www.googleapis.com/auth/drive']
   });
+  
   return google.drive({ version: 'v3', auth });
 };
 
@@ -69,7 +82,7 @@ export async function appendToLogFile(folderId: string, newText: string) {
 
     if (fileId) {
       await drive.files.update({ fileId, media });
-      console.log(`    [📝 LOG] Historial añadido correctamente en el Luck de texto. (Update)`);
+      console.log(`    [📝 LOG] Historial añadido correctamente en el Log de texto. (Update)`);
     } else {
       await drive.files.create({
         requestBody: { name: 'Log_Conversacion.txt', parents: [folderId] },
