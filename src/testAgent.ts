@@ -4,7 +4,7 @@ dotenv.config({ path: '.env.local' });
 import { GoogleGenerativeAI, Tool, FunctionCallingMode } from '@google/generative-ai';
 import { searchPropertiesInSupabase } from './tools/supabaseTools.js';
 import { prepararEntornoCliente, actualizarHistorial, borrarCarpetasAntiguas } from './tools/driveLogger.js';
-import { sendCrmLeadNotification, triggerCmsPropertyPublish } from './tools/webhookTools.js';
+import { sendCrmLeadNotification } from './tools/webhookTools.js';
 import { SYSTEM_PROMPT } from './agents/realEstateExecutive.js';
 
 const OK   = '✅';
@@ -61,7 +61,6 @@ async function cleanupDrive() {
   }
 }
 
-// ─── Ejecutor de tools ────────────────────────────────────────────────────────
 async function ejecutarTool(nombre: string, args: any): Promise<any> {
   console.log(`  [Tool] ${nombre} →`, JSON.stringify(args));
   switch (nombre) {
@@ -103,13 +102,13 @@ async function testAgenteDirecto(mensaje = 'Hola, soy Carlos García, busco una 
       },
       {
         name: 'guardarConversacion',
-        description: 'Guarda el turno de conversación en el historial. Llama esto tras cada respuesta.',
+        description: 'Guarda el turno en el historial. SIEMPRE llama esto después de responder al cliente, incluyendo el texto exacto de tu respuesta en respuestaAgente.',
         parameters: {
           type: 'OBJECT' as any,
           properties: {
             docId: { type: 'STRING' as any, description: 'ID del doc obtenido al registrar cliente.' },
-            mensajeUsuario: { type: 'STRING' as any, description: 'Mensaje del cliente.' },
-            respuestaAgente: { type: 'STRING' as any, description: 'Resumen de la respuesta de Harvis.' },
+            mensajeUsuario: { type: 'STRING' as any, description: 'Mensaje exacto del cliente.' },
+            respuestaAgente: { type: 'STRING' as any, description: 'Texto exacto de la respuesta de Harvis.' },
           },
           required: ['docId', 'mensajeUsuario', 'respuestaAgente'],
         },
@@ -127,7 +126,7 @@ async function testAgenteDirecto(mensaje = 'Hola, soy Carlos García, busco una 
       },
       {
         name: 'notificarLeadCRM',
-        description: 'Registra el lead cualificado en el CRM de Supabase.',
+        description: 'Registra el lead cualificado en el CRM.',
         parameters: {
           type: 'OBJECT' as any,
           properties: {
@@ -154,26 +153,30 @@ async function testAgenteDirecto(mensaje = 'Hola, soy Carlos García, busco una 
 
   console.log(`\n💬 Usuario: "${mensaje}"\n`);
 
-  // Bucle agentico — max 10 iteraciones
   let inputActual: any = mensaje;
   let docId: string | null = null;
+  let ultimoTextoHarvis = '';
 
   for (let i = 0; i < 10; i++) {
     const result = await chat.sendMessage(inputActual);
     const response = result.response;
-    const candidate = response.candidates?.[0];
-    const parts = candidate?.content?.parts ?? [];
+    const parts = response.candidates?.[0]?.content?.parts ?? [];
 
-    // Procesar parts
     const toolResults = [];
-    let textoRespuesta = '';
+    let textoEsteRound = '';
 
     for (const part of parts) {
       if (part.text) {
-        textoRespuesta += part.text;
+        textoEsteRound += part.text;
       }
-      if (part.functionCall) {
-        const { name, args } = part.functionCall;
+      if ((part as any).functionCall) {
+        const { name, args } = (part as any).functionCall;
+
+        // Si es guardarConversacion y no tiene respuestaAgente, inyectamos el texto actual
+        if (name === 'guardarConversacion' && !args.respuestaAgente && ultimoTextoHarvis) {
+          args.respuestaAgente = ultimoTextoHarvis;
+        }
+
         const toolResult = await ejecutarTool(name, args);
         if (name === 'registrarCliente' && toolResult.docId) {
           docId = toolResult.docId;
@@ -184,17 +187,22 @@ async function testAgenteDirecto(mensaje = 'Hola, soy Carlos García, busco una 
       }
     }
 
-    if (textoRespuesta) {
-      console.log(`\n🤖 Harvis: ${textoRespuesta}`);
+    if (textoEsteRound) {
+      ultimoTextoHarvis = textoEsteRound;
+      console.log(`\n🤖 Harvis: ${textoEsteRound}`);
     }
 
-    // Si hay resultados de tools, enviamos de vuelta y continuamos
     if (toolResults.length > 0) {
       inputActual = toolResults;
       continue;
     }
 
-    // Sin tool calls — el agente terminó
+    // Sin más tool calls — guardamos la conversación si tenemos docId
+    if (docId && ultimoTextoHarvis) {
+      console.log(`\n  [Auto-log] Guardando conversación en doc...`);
+      await actualizarHistorial(docId, mensaje, ultimoTextoHarvis);
+    }
+
     break;
   }
 
