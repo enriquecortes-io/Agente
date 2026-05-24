@@ -90,8 +90,8 @@ export async function POST(req: Request) {
         municipioDeducido: zonaDirecta || undefined,
         precioMax: presupuestoDirecto || undefined,
       });
-      if (resultadoBusqueda.propiedades?.length > 0) {
-        const respuesta = construirRespuesta(resultadoBusqueda.propiedades, contacto.nombre, zonaDirecta);
+      if ((resultadoBusqueda.propiedades ?? []).length > 0) {
+        const respuesta = construirRespuesta(resultadoBusqueda.propiedades ?? [], contacto.nombre, zonaDirecta);
         // Registrar cliente async
         if (contacto.nombre) {
           prepararEntornoCliente(contacto.nombre, 'Venta')
