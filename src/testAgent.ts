@@ -9,36 +9,27 @@ dotenv.config({ path: '.env.local' });
 
 const tools = {
   buscarPropiedades: tool({
-    description: 'Obligatorio para buscar propiedades. Extrae la urbanización, deduce el municipio y extrae el presupuesto.',
+    description: 'Obligatorio para buscar propiedades. Extrae TODAS las zonas, deduce los municipios y el presupuesto.',
+    // 🚀 EL FIX: Usamos z.array(z.string()) para que soporte múltiples zonas sin colapsar y z.number() directo
     parameters: z.object({
-      urbanizacion: z.string().describe('Urbanización o zona (ej: "Sotogrande")'),
-      municipio: z.string().describe('Municipio deducido (ej: "San Roque", "Benahavis", "Marbella")'),
-      presupuesto: z.string().describe('Presupuesto máximo como número en texto (ej: "7000000")')
+      zonas: z.array(z.string()).describe('Lista de TODAS las zonas/urbanizaciones pedidas (ej: ["Sotogrande", "La Zagaleta"])'),
+      municipios: z.array(z.string()).describe('Lista de los municipios a los que pertenecen (ej: ["San Roque", "Benahavis"])'),
+      presupuestoMaximo: z.number().describe('Presupuesto máximo convertido a número puro (ej: Si dice 7M, pon 7000000)')
     }),
     execute: async (args) => {
-      // 🛡️ BARRERA ANTI-VAGOS: Si llega undefined, le devolvemos un error para que piense
-      if (!args.urbanizacion || args.urbanizacion === 'undefined' || args.urbanizacion === '') {
-        console.log(`    ⚠️ [SISTEMA] Harvis mandó datos vacíos. Forzando a la IA a reintentar...`);
-        return { error: 'ERROR: No has rellenado los campos. Vuelve a leer el mensaje y extrae la urbanización, el municipio y el presupuesto.' };
-      }
+      console.log(`\n    🔌 [TOOL SUPABASE] ¡Harvis ha procesado los datos a la perfección!`);
+      console.log(`    📍 Zonas extraídas:    ${args.zonas?.join(', ') || 'Ninguna'}`);
+      console.log(`    🗺️ Municipios (IA):    ${args.municipios?.join(', ') || 'Ninguno'}`);
+      console.log(`    💰 Presupuesto Max:    ${args.presupuestoMaximo || 0}€`);
 
-      let precioCalculado = 0;
-      if (args.presupuesto && args.presupuesto !== 'undefined') {
-        const strLimpio = args.presupuesto.toLowerCase().replace(/euros|€/g, '').trim();
-        if (strLimpio.includes('m') || strLimpio.includes('millon')) {
-          const numero = parseFloat(strLimpio.replace(/[^\d.,]/g, '').replace(',', '.'));
-          if (!isNaN(numero)) precioCalculado = numero * 1000000;
-        } else {
-          const numero = parseInt(strLimpio.replace(/\D/g, ''));
-          if (!isNaN(numero)) precioCalculado = numero;
-        }
-      }
+      // Unimos las listas con comas para que tu script de Supabase las procese
+      const zonasUnidas = args.zonas?.join(',') || '';
+      const municipiosUnidos = args.municipios?.join(',') || '';
 
-      console.log(`\n    🔌 [TOOL SUPABASE] ¡Harvis busca! -> Urba: "${args.urbanizacion}" | Municipio Deducido: "${args.municipio}" | Presupuesto: ${precioCalculado}€`);
       return await searchPropertiesInSupabase({ 
-        urbanizacion: args.urbanizacion, 
-        municipioDeducido: args.municipio, 
-        precioMax: precioCalculado 
+        urbanizacion: zonasUnidas, 
+        municipioDeducido: municipiosUnidos, 
+        precioMax: args.presupuestoMaximo 
       });
     }
   })
@@ -56,21 +47,18 @@ async function hablarConHarvis(mensajeCliente: string) {
   try {
     const response = await generateText({
       model: google('gemini-2.5-flash'),
-      temperature: 0.1,
-      system: SYSTEM_PROMPT + "\n\nREGLA ESTRICTA: Eres un extractor de datos. DEBES usar las herramientas y rellenar TODOS los campos con datos reales. Nunca envíes 'undefined'.",
+      temperature: 0.1, // Cero creatividad, máxima precisión
+      system: SYSTEM_PROMPT + "\n\nREGLA ESTRICTA: Eres un extractor de datos de alto nivel. Extrae siempre TODAS las zonas mencionadas y el presupuesto máximo en número. Deduce los municipios españoles.",
       messages: historialChat,
       tools: tools,
-      toolChoice: 'required', // 🔥 LA PISTOLA EN LA CABEZA QUE SE ME OLVIDÓ
+      toolChoice: 'required', // Pistola cargada
       maxSteps: 5
     });
 
     console.log(`\n🤖 AGENTE HARVIS:`);
     console.log(`─────────────────────────────────────────────────────────────────────────`);
-    console.log(response.text || "(Búsqueda y deducción completadas)");
+    console.log(response.text || "(Búsqueda ejecutada en segundo plano)");
     console.log(`─────────────────────────────────────────────────────────────────────────\n`);
-
-    if (response.messages) historialChat = response.messages;
-    else historialChat.push({ role: 'assistant', content: response.text });
 
   } catch (error: any) {
     console.error('❌ Error durante la simulación:', error.message || error);
