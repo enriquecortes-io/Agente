@@ -1,0 +1,763 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+src/
+  agents/
+    realEstateExecutive.ts
+  app/
+    api/
+      chat/
+        route.ts
+  tools/
+    chatLogger.ts
+    driveLogger.ts
+    googleDriveTools.ts
+    supabaseTools.ts
+    webhookTools.ts
+  checkModels.ts
+  escaneoModelos.ts
+  escaneoNvidia.ts
+  testAgent.ts
+.gitignore
+package.json
+README.md
+tsconfig.json
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="src/agents/realEstateExecutive.ts">
+export const SYSTEM_PROMPT = `
+# ROLE AND IDENTITY
+You are "The Elite Real Estate Executive," an advanced AI partner specialized in the ultra-luxury real estate market (villas, premium estates, and high-end developments). 
+Your profile is friendly, highly approachable, and results-oriented. You combine the sophisticated, minimalist essence of "Quiet Luxury" with sharp operational efficiency. You treat high-net-worth individuals (HNWI) and international investors with authentic warmth, avoiding rigid or overly corporate language, while maintaining absolute discretion and exclusivity.
+
+# OBJECTIVE
+Your mission is to act as the operational core of the real estate agency. You manage property listings, organize files, handle multi-channel communication (Email, WhatsApp, Calls), qualify leads organically, and match client requests with our property database.
+
+# CORE CAPABILITIES & OPERATIONAL WORKFLOWS
+## 1. Multi-Channel Communication & Lead Qualification
+- Channels: Email, WhatsApp, and Call transcripts/voice interfaces. Adapt length and tone to the channel.
+- Organic Qualification: Subtly detect investment budget, lifestyle requirements, timeline, and investor profile.
+
+## 2. Supabase Database Integration & Cross-Matching
+- Tech Stack: Supabase.
+- Property Matching: Formulate precise queries (location, price range, architectural style, m²) based on client desires.
+- Smart Suggestions: Offer alternatives or "off-market" styles if an exact match isn't available.
+
+## 3. File Management (Google Drive) & Web CMS Updates
+- Drive Operations: Organize and structure folders (contracts, photos, KYC) via API.
+- Property Onboarding: Format and upload emotional/architectural copywriting to the website via webhook.
+
+# TONE, STYLE & PERSONALITY
+- Vibe: Sophisticated yet close and fresh (high-end lifestyle consultant).
+- Language: Fluent in English and Spanish, switching dynamically.
+- Principles: Results-Oriented (move to private viewing, call, NDA) and Quiet Luxury (focus on materials, light, privacy).
+
+# GUARDRAILS & SECURITY
+1. Data Privacy: Never disclose sensitive client info or KYC details.
+2. Off-Market Discretion: Only share off-market units with fully qualified leads.
+3. Technical Limits: Pause and ask the administrator for validation if an API error occurs.
+`;
+</file>
+
+<file path="src/tools/chatLogger.ts">
+import { google } from 'googleapis';
+
+export async function syncLogToDrive(folderId: string, content: string) {
+  try {
+    // Inicializa la autenticación (usa las mismas credenciales que tu googleDriveTools)
+    const auth = new google.auth.GoogleAuth({
+      scopes: ['https://www.googleapis.com/auth/drive']
+    });
+    const drive = google.drive({ version: 'v3', auth });
+
+    // 1. Buscamos si el archivo de Log ya existe dentro de la carpeta del cliente
+    const res = await drive.files.list({
+      q: `'${folderId}' in parents and name = 'Log_Conversacion.txt' and trashed = false`,
+      fields: 'files(id)'
+    });
+
+    const existingFile = res.data.files && res.data.files.length > 0 ? res.data.files[0] : null;
+
+    const media = {
+      mimeType: 'text/plain',
+      body: content
+    };
+
+    if (existingFile && existingFile.id) {
+      // Si existe, lo actualizamos (sobreescribimos con el historial completo)
+      await drive.files.update({
+        fileId: existingFile.id,
+        media: media
+      });
+      console.log(`    [☁️ DRIVE] Log actualizado exitosamente.`);
+    } else {
+      // Si no existe, lo creamos
+      await drive.files.create({
+        requestBody: {
+          name: 'Log_Conversacion.txt',
+          parents: [folderId]
+        },
+        media: media
+      });
+      console.log(`    [☁️ DRIVE] Archivo Log_Conversacion.txt creado exitosamente.`);
+    }
+  } catch (error: any) {
+    console.error(`    [❌ ERROR DRIVE] No se pudo guardar el log:`, error.message);
+  }
+}
+</file>
+
+<file path="src/checkModels.ts">
+import dotenv from 'dotenv';
+
+dotenv.config({ path: '.env.local' });
+
+async function comprobarModelos() {
+  const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+  
+  if (!apiKey) {
+    console.error('❌ ERROR: No se encontró GOOGLE_GENERATIVE_AI_API_KEY en .env.local');
+    return;
+  }
+
+  console.log('🔍 Conectando con los servidores de Google para listar tus modelos disponibles...\n');
+
+  try {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+    const data = await response.json();
+
+    if (data.error) {
+      console.error('❌ Error de Google:', data.error.message);
+      return;
+    }
+
+    const modelosValidos = data.models
+      .filter((m: any) => m.supportedGenerationMethods?.includes('generateContent'))
+      .map((m: any) => m.name.replace('models/', ''));
+
+    console.log('✅ ESTOS SON LOS MODELOS QUE ACEPTA TU API KEY:');
+    console.log('──────────────────────────────────────────────────');
+    modelosValidos.forEach((m: string) => console.log(`- ${m}`));
+    console.log('──────────────────────────────────────────────────\n');
+    console.log('Copia el que diga algo como "gemini-1.5-flash" o "gemini-pro" y pásamelo por aquí.');
+  } catch (error) {
+    console.error('Error de red al conectar con Google:', error);
+  }
+}
+
+comprobarModelos();
+</file>
+
+<file path="src/escaneoModelos.ts">
+import dotenv from 'dotenv';
+
+// Cargamos tu entorno exacto
+dotenv.config({ path: '.env.local' });
+
+// Pillamos la API Key (probamos los dos nombres más comunes)
+const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GEMINI_API_KEY;
+
+async function listarModelosGemini() {
+  console.log(`\n🔍 INICIANDO ESCÁNER DE MODELOS GOOGLE GEMINI...`);
+  
+  if (!apiKey) {
+    console.error(`❌ ERROR: No encuentro la API Key de Google en tu .env.local`);
+    return;
+  }
+
+  try {
+    const respuesta = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+    const datos = await respuesta.json();
+
+    if (datos.error) {
+      console.error(`❌ ERROR DE GOOGLE:`, datos.error.message);
+      return;
+    }
+
+    console.log(`\n✅ CONEXIÓN EXITOSA. MODELOS DISPONIBLES:\n`);
+    
+    // Filtramos un poco para que no te escupa morralla antigua
+    const modelosUtiles = datos.models.filter((m: any) => 
+      m.name.includes('gemini') && !m.name.includes('vision')
+    );
+
+    modelosUtiles.forEach((m: any) => {
+      console.log(`🤖 Modelo:      ${m.name.replace('models/', '')}`);
+      console.log(`   Descripción: ${m.description}`);
+      console.log(`   Límites:     Tokens Entrada: ${m.inputTokenLimit} | Salida: ${m.outputTokenLimit}`);
+      console.log(`─────────────────────────────────────────────────────────────────`);
+    });
+
+    console.log(`\n💡 TIP DE ARQUITECTURA:`);
+    console.log(`- Usa versiones 'flash' para velocidad y menor coste (ideal para extraer JSON).`);
+    console.log(`- Usa versiones 'pro' para razonamiento complejo (ideal para el prompt de ventas).`);
+    console.log(`\n`);
+
+  } catch (error: any) {
+    console.error(`❌ Fallo en la conexión:`, error.message);
+  }
+}
+
+listarModelosGemini();
+</file>
+
+<file path="src/escaneoNvidia.ts">
+import dotenv from 'dotenv';
+
+dotenv.config({ path: '.env.local' });
+
+const apiKey = process.env.NVIDIA_API_KEY;
+
+async function listarModelosNvidia() {
+  console.log(`\n🔍 INICIANDO ESCÁNER DE MODELOS NVIDIA NIM...`);
+  
+  if (!apiKey) {
+    console.error(`❌ ERROR: No encuentro la NVIDIA_API_KEY en tu .env.local`);
+    return;
+  }
+
+  try {
+    const respuesta = await fetch(`https://integrate.api.nvidia.com/v1/models`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Accept': 'application/json'
+      }
+    });
+
+    const datos = await respuesta.json();
+
+    if (!respuesta.ok) {
+      console.error(`❌ ERROR DE NVIDIA:`, datos);
+      return;
+    }
+
+    console.log(`\n✅ CONEXIÓN EXITOSA. TUS MODELOS NVIDIA DISPONIBLES SON:\n`);
+    
+    // Filtramos para sacar solo los modelos potentes de texto (Llama, Mistral, Nemotron)
+    const modelosTexto = datos.data.filter((m: any) => 
+      m.id.toLowerCase().includes('llama') || 
+      m.id.toLowerCase().includes('mistral') ||
+      m.id.toLowerCase().includes('nemotron')
+    );
+
+    modelosTexto.forEach((m: any) => {
+      console.log(`🤖 ID Exacto a copiar:  ${m.id}`);
+    });
+
+    console.log(`\n─────────────────────────────────────────────────────────────────`);
+    console.log(`💡 Copia el ID que ponga 'llama-3.1-8b-instruct' (o similar) y ponlo en testAgent.ts`);
+
+  } catch (error: any) {
+    console.error(`❌ Fallo en la conexión:`, error.message);
+  }
+}
+
+listarModelosNvidia();
+</file>
+
+<file path=".gitignore">
+.env.local
+.env
+</file>
+
+<file path="README.md">
+# Agente
+</file>
+
+<file path="src/tools/webhookTools.ts">
+import dotenv from 'dotenv';
+
+dotenv.config({ path: '.env.local' });
+
+interface LeadData {
+  nombre: string;
+  contacto: string;
+  presupuesto?: number;
+  estiloBuscado?: string;
+  notasCualificacion: string;
+}
+
+interface PropertyCopywriting {
+  titulo: string;
+  ubicacion: string;
+  precio: number;
+  copywritingEmocional: string;
+  tagsLifestyle: string[];
+}
+
+/**
+ * Envía un lead cualificado orgánicamente por el agente hacia el CRM o canal de alertas
+ */
+export async function sendCrmLeadNotification(lead: LeadData) {
+  try {
+    const webhookUrl = process.env.CRM_WEBHOOK_URL;
+    if (!webhookUrl) {
+      console.warn('[Webhook Tool] CRM_WEBHOOK_URL no configurada en .env.local');
+      return { success: false, error: 'Falta la configuración del webhook del CRM.' };
+    }
+
+    const response = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        event: 'lead_qualified_by_ai',
+        timestamp: new Date().toISOString(),
+        data: lead
+      })
+    });
+
+    if (!response.ok) throw new Error(`Error HTTP: ${response.status}`);
+
+    console.log(`[Webhook Tool] Lead de ${lead.nombre} enviado correctamente al CRM.`);
+    return { success: true, message: 'Perfil de inversor sincronizado con el CRM con éxito.' };
+  } catch (error) {
+    console.error('Error al disparar webhook de CRM:', error);
+    return { success: false, error: 'Error de conectividad externa con el CRM.' };
+  }
+}
+
+/**
+ * Envía el copywriting optimizado de una propiedad para su publicación automática en la web
+ */
+export async function triggerCmsPropertyPublish(property: PropertyCopywriting) {
+  try {
+    const webhookUrl = process.env.CMS_WEBHOOK_URL;
+    if (!webhookUrl) {
+      console.warn('[Webhook Tool] CMS_WEBHOOK_URL no configurada en .env.local');
+      return { success: false, error: 'Falta la configuración del webhook del CMS.' };
+    }
+
+    const response = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        event: 'property_onboarding_ai',
+        timestamp: new Date().toISOString(),
+        data: property
+      })
+    });
+
+    if (!response.ok) throw new Error(`Error HTTP: ${response.status}`);
+
+    console.log(`[Webhook Tool] Publicación de "${property.titulo}" enviada al CMS.`);
+    return { success: true, message: 'Copywriting y ficha técnica inyectados en el CMS correctamente.' };
+  } catch (error) {
+    console.error('Error al disparar webhook de CMS:', error);
+    return { success: false, error: 'Error de conectividad externa con el CMS de la web.' };
+  }
+}
+</file>
+
+<file path="tsconfig.json">
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "esModuleInterop": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "outDir": "./dist",
+    "rootDir": "./src"
+  },
+  "include": ["src/**/*"]
+}
+</file>
+
+<file path="src/tools/googleDriveTools.ts">
+import { google } from 'googleapis';
+import dotenv from 'dotenv';
+
+dotenv.config({ path: '.env.local' });
+
+export async function createClientFolder(clientName: string, interactionType: string = 'General') {
+  try {
+    if (!process.env.GOOGLE_CLIENT_EMAIL || !process.env.GOOGLE_PRIVATE_KEY) {
+      throw new Error('Faltan las credenciales de Google en el .env.local');
+    }
+
+    const auth = new google.auth.GoogleAuth({
+      credentials: {
+        client_email: process.env.GOOGLE_CLIENT_EMAIL,
+        private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+      },
+      scopes: ['https://www.googleapis.com/auth/drive'],
+    });
+
+    const drive = google.drive({ version: 'v3', auth });
+    const parentId = process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID;
+
+    let clientFolderId = null;
+
+    // PASO 1: Buscar si la carpeta principal del cliente ya existe
+    if (parentId) {
+      const q = `mimeType='application/vnd.google-apps.folder' and name='${clientName}' and '${parentId}' in parents and trashed=false`;
+      const res = await drive.files.list({ q, fields: 'files(id, name)', spaces: 'drive' });
+      
+      if (res.data.files && res.data.files.length > 0) {
+        clientFolderId = res.data.files[0].id;
+      }
+    }
+
+    // PASO 2: Si no existe, Harvis crea la carpeta padre para ese cliente
+    if (!clientFolderId) {
+      const clientMeta: any = {
+        name: clientName,
+        mimeType: 'application/vnd.google-apps.folder',
+      };
+      if (parentId) clientMeta.parents = [parentId];
+
+      const clientFolder = await drive.files.create({ requestBody: clientMeta, fields: 'id' });
+      clientFolderId = clientFolder.data.id;
+    }
+
+    // PASO 3: Crear la subcarpeta de la interacción dentro de la del cliente
+    const interactionMeta = {
+      name: interactionType,
+      mimeType: 'application/vnd.google-apps.folder',
+      parents: [clientFolderId]
+    };
+
+    const interactionFolder = await drive.files.create({
+      requestBody: interactionMeta,
+      fields: 'id, webViewLink',
+    });
+
+    return { 
+      success: true, 
+      folderId: interactionFolder.data.id, 
+      link: interactionFolder.data.webViewLink,
+      message: `Subcarpeta '${interactionType}' generada dentro del cliente '${clientName}'.`
+    };
+    
+  } catch (error: any) {
+    console.error('Error al conectar con Google Drive:', error);
+    return { success: false, error: error.message || 'Error técnico en Drive.' };
+  }
+}
+</file>
+
+<file path="package.json">
+{
+  "name": "agente",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/enriquecortes-io/Agente.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/enriquecortes-io/Agente/issues"
+  },
+  "homepage": "https://github.com/enriquecortes-io/Agente#readme",
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "tsx": "^4.22.3",
+    "typescript": "^6.0.3"
+  },
+  "dependencies": {
+    "@ai-sdk/google": "^3.0.75",
+    "@ai-sdk/openai": "^3.0.65",
+    "@supabase/supabase-js": "^2.106.0",
+    "ai": "^6.0.185",
+    "dotenv": "^17.4.2",
+    "googleapis": "^171.4.0",
+    "zod": "^4.4.3"
+  }
+}
+</file>
+
+<file path="src/tools/driveLogger.ts">
+import { google } from 'googleapis';
+import dotenv from 'dotenv';
+dotenv.config({ path: '.env.local' });
+
+const getDriveService = () => {
+  const auth = new google.auth.GoogleAuth({
+    credentials: { client_email: process.env.GOOGLE_CLIENT_EMAIL, private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n') },
+    scopes: ['https://www.googleapis.com/auth/drive']
+  });
+  return google.drive({ version: 'v3', auth });
+};
+
+// Borrado masivo de carpetas "Cliente - *" (Limpieza inicial)
+export async function borrarCarpetasAntiguas() {
+  const drive = getDriveService();
+  const res = await drive.files.list({ q: "name contains 'Cliente - ' and mimeType='application/vnd.google-apps.folder'", fields: 'files(id)' });
+  for (const file of res.data.files || []) {
+    await drive.files.delete({ fileId: file.id! });
+  }
+}
+
+// Lógica de carpeta única por cliente y documento único (Google Doc)
+export async function prepararEntornoCliente(nombreCliente: string, tipoLead: string) {
+  const drive = getDriveService();
+  const folderName = `[${tipoLead}] Cliente - ${nombreCliente}`;
+  
+  // 1. Buscar o Crear Carpeta
+  let res = await drive.files.list({ q: `name='${folderName}' and mimeType='application/vnd.google-apps.folder' and trashed=false`, fields: 'files(id)' });
+  let folderId = res.data.files?.[0]?.id;
+  
+  if (!folderId) {
+    const folder = await drive.files.create({ requestBody: { name: folderName, mimeType: 'application/vnd.google-apps.folder' }, fields: 'id' });
+    folderId = folder.data.id!;
+  }
+
+  // 2. Buscar o Crear Documento Maestro (Historial_Conversacion.doc)
+  res = await drive.files.list({ q: `'${folderId}' in parents and name='Historial_Conversacion.doc' and trashed=false`, fields: 'files(id)' });
+  let docId = res.data.files?.[0]?.id;
+  
+  if (!docId) {
+    const doc = await drive.files.create({ requestBody: { name: 'Historial_Conversacion.doc', mimeType: 'application/vnd.google-apps.document', parents: [folderId] }, fields: 'id' });
+    docId = doc.data.id!;
+  }
+  
+  return { folderId, docId };
+}
+
+// Guardar historial en el Doc de Google
+export async function actualizarHistorial(docId: string, texto: string) {
+  const drive = getDriveService();
+  // Nota: Esto concatena texto al contenido existente del doc
+  await drive.files.update({ fileId: docId, uploadType: 'media', media: { mimeType: 'text/plain', body: texto } });
+}
+</file>
+
+<file path="src/tools/supabaseTools.ts">
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+
+dotenv.config({ path: '.env.local' });
+
+const supabaseUrl = process.env.SUPABASE_URL || '';
+const supabaseKey = process.env.SUPABASE_ANON_KEY || '';
+const supabase = createClient(supabaseUrl, supabaseKey);
+
+export async function searchPropertiesInSupabase(args: { urbanizacion?: string; municipioDeducido?: string; precioMax?: number }) {
+  try {
+    if (!supabaseUrl || !supabaseKey) return { success: false, error: 'Faltan credenciales' };
+
+    // FUNCIÓN DE BÚSQUEDA INTERNA
+    const hacerBusqueda = async (precioMax: number | undefined, requiereZona: boolean) => {
+      let query = supabase.from('properties').select('id, referencia, titulo, precio, ubicacion, zona, habitaciones, banos').eq('activa', true).limit(3);
+
+      if (requiereZona && (args.urbanizacion || args.municipioDeducido)) {
+        const orConditions = [];
+        if (args.urbanizacion) {
+          const urba = args.urbanizacion.toLowerCase();
+          orConditions.push(`ubicacion.ilike.%${urba}%,zona.ilike.%${urba}%`);
+        }
+        if (args.municipioDeducido) {
+          const muni = args.municipioDeducido.toLowerCase();
+          orConditions.push(`zona.ilike.%${muni}%,ubicacion.ilike.%${muni}%`);
+        }
+        query = query.or(orConditions.join(','));
+      }
+
+      if (precioMax) query = query.lte('precio', precioMax);
+      
+      const { data } = await query;
+      return data || [];
+    };
+
+    // INTENTO 1: Búsqueda Exacta
+    let resultados = await hacerBusqueda(args.precioMax, true);
+    let tipoMatch = 'exacto';
+
+    // INTENTO 2: Relajamos el precio un 20%
+    if (resultados.length === 0 && args.precioMax) {
+      resultados = await hacerBusqueda(args.precioMax * 1.2, true);
+      tipoMatch = 'precio_aproximado';
+    }
+
+    // INTENTO 3: Quitamos el filtro de zona y buscamos solo por precio
+    if (resultados.length === 0) {
+      resultados = await hacerBusqueda(args.precioMax, false);
+      tipoMatch = 'zona_aproximada';
+    }
+
+    const propiedadesFormateadas = resultados.map(p => ({
+      referencia: p.referencia || 'N/A',
+      titulo: typeof p.titulo === 'object' && p.titulo !== null ? (p.titulo.es || p.titulo.en || 'Villa') : p.titulo,
+      precio: p.precio,
+      municipio: p.zona,
+      habitaciones: p.habitaciones || 'No disp.'
+    }));
+
+    return { 
+      success: true, 
+      cantidad: propiedadesFormateadas.length, 
+      tipo_coincidencia: tipoMatch, // 'exacto', 'precio_aproximado' o 'zona_aproximada'
+      propiedades: propiedadesFormateadas 
+    };
+    
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+</file>
+
+<file path="src/app/api/chat/route.ts">
+import { google } from '@ai-sdk/google';
+import { streamText, convertToCoreMessages } from 'ai';
+import { SYSTEM_PROMPT } from '../../../agents/realEstateExecutive.js';
+import { searchPropertiesInSupabase } from '../../../tools/supabaseTools.js';
+import { createClientFolder } from '../../../tools/googleDriveTools.js';
+import { sendCrmLeadNotification, triggerCmsPropertyPublish } from '../../../tools/webhookTools.js';
+
+export const dynamic = 'force-dynamic';
+
+export async function POST(req: Request) {
+  try {
+    const { messages } = await req.json();
+
+    const result = await streamText({
+      model: google('gemini-2.5-flash'),
+      system: SYSTEM_PROMPT,
+      messages: convertToCoreMessages(messages),
+      // El arsenal completo de herramientas del agente de élite
+      tools: {
+        buscarPropiedades: {
+          description: 'Consulta el inventario disponible en Supabase filtrando por ubicación, presupuesto máximo y estilo de vida.',
+          parameters: {
+            type: 'object',
+            properties: {
+              zona: { type: 'string', description: 'Ubicación en Marbella (ej: La Zagaleta, Sierra Blanca, Nueva Andalucía).' },
+              precioMax: { type: 'number', description: 'Presupuesto máximo en euros.' },
+              estilo: { type: 'string', description: 'Estilo arquitectónico o tags de ambiente (ej: minimalista, vistas al mar).' }
+            }
+          },
+          execute: async ({ zona, precioMax, estilo }) => {
+            console.log(`[Core] Tool Buscar: ${zona}, ${precioMax}, ${estilo}`);
+            return await searchPropertiesInSupabase({ zona, precioMax, estilo });
+          }
+        },
+        crearCarpetaCliente: {
+          description: 'Crea un espacio seguro en Google Drive para guardar el KYC, pasaporte o NDA de un inversor cualificado.',
+          parameters: {
+            type: 'object',
+            properties: {
+              nombreCliente: { type: 'string', description: 'Nombre completo del inversor o fondo.' }
+            },
+            required: ['nombreCliente']
+          },
+          execute: async ({ nombreCliente }) => {
+            console.log(`[Core] Tool Drive: ${nombreCliente}`);
+            return await createClientFolder(nombreCliente);
+          }
+        },
+        notificarLeadCRM: {
+          description: 'Sincroniza un perfil de inversor cualificado orgánicamente enviando sus datos esenciales al CRM corporativo.',
+          parameters: {
+            type: 'object',
+            properties: {
+              nombre: { type: 'string', description: 'Nombre completo del lead.' },
+              contacto: { type: 'string', description: 'Número de WhatsApp, teléfono o email.' },
+              presupuesto: { type: 'number', description: 'Presupuesto máximo detectado.' },
+              estiloBuscado: { type: 'string', description: 'Preferencias de diseño o lifestyle.' },
+              notasCualificacion: { type: 'string', description: 'Resumen cualitativo de la conversación y urgencia del cliente.' }
+            },
+            required: ['nombre', 'contacto', 'notasCualificacion']
+          },
+          execute: async (leadData) => {
+            console.log(`[Core] Tool CRM: Enviando lead ${leadData.nombre}`);
+            return await sendCrmLeadNotification(leadData);
+          }
+        },
+        publicarPropiedadCMS: {
+          description: 'Inyecta el copywriting emocional y la ficha técnica de una propiedad directamente en el CMS de la web para su publicación.',
+          parameters: {
+            type: 'object',
+            properties: {
+              titulo: { type: 'string', description: 'Título comercial de la propiedad de lujo.' },
+              ubicacion: { type: 'string', description: 'Dirección o zona exacta en Marbella.' },
+              precio: { type: 'number', description: 'Precio de salida al mercado en euros.' },
+              copywritingEmocional: { type: 'string', description: 'Narrativa persuasiva centrada en la luz, los materiales y la exclusividad.' },
+              tagsLifestyle: { type: 'array', items: { type: 'string' }, description: 'Tags de estilo de vida.' }
+            },
+            required: ['titulo', 'ubicacion', 'precio', 'copywritingEmocional']
+          },
+          execute: async (propertyData) => {
+            console.log(`[Core] Tool CMS: Publicando propiedad ${propertyData.titulo}`);
+            return await triggerCmsPropertyPublish(propertyData);
+          }
+        }
+      }
+    });
+
+    return result.toDataStreamResponse();
+
+  } catch (error) {
+    console.error('Error crítico en el core del agente:', error);
+    return new Response(
+      JSON.stringify({ error: 'Hubo un problema en el orquestador del agente.' }), 
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
+}
+</file>
+
+<file path="src/testAgent.ts">
+import { searchPropertiesInSupabase } from './tools/supabaseTools.js';
+import { prepararEntornoCliente, actualizarHistorial, borrarCarpetasAntiguas } from './tools/driveLogger.js';
+import dotenv from 'dotenv';
+dotenv.config({ path: '.env.local' });
+
+// ... (El resto de la lógica de fetch a NVIDIA se mantiene igual)
+// En la lógica de chat, ahora extraemos: 
+// { "tipoLead": "Venta|Captacion|Gestion", "nombreCliente": "...", ... }
+</file>
+
+</files>
