@@ -157,7 +157,7 @@ export async function POST(req: Request) {
          'Content-Type': 'application/json',
        },
        body: JSON.stringify({
-         model: 'nvidia/llama-3.3-nemotron-super-49b-v1',
+         model: 'meta/llama-3.3-70b-instruct',
          messages,
          tools: TOOLS,
          tool_choice: 'auto',
