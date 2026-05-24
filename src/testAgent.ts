@@ -53,7 +53,7 @@ async function cleanupDrive() {
   }
 }
 
-async function ejecutarTool(nombre: string, args: any, contexto: { clienteNombre?: string, tipoLead?: string } = {}): Promise<any> {
+async function ejecutarTool(nombre: string, args: any, clienteNombre?: string): Promise<any> {
   console.log(`  [Tool] ${nombre} →`, JSON.stringify(args));
   switch (nombre) {
     case 'registrarCliente':
@@ -61,8 +61,8 @@ async function ejecutarTool(nombre: string, args: any, contexto: { clienteNombre
     case 'guardarConversacion':
       await actualizarHistorial(args.docId, args.mensajeUsuario, args.respuestaAgente);
       await guardarConversacionSupabase({
-        clienteNombre: args.clienteNombre || contexto.clienteNombre || 'Desconocido',
-        tipoLead: args.tipoLead || contexto.tipoLead as any,
+        clienteNombre: args.clienteNombre || clienteNombre || 'Desconocido',
+        tipoLead: args.tipoLead,
         mensajeUsuario: args.mensajeUsuario,
         respuestaAgente: args.respuestaAgente,
       });
@@ -88,35 +88,30 @@ async function testAgenteDirecto(mensaje = 'Hola, soy Carlos García, busco una 
   const matchNombre = mensaje.match(/(?:soy|me llamo|habla|es)\s+([A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+){0,2})(?:\s+de\s+nuevo|\s+otra\s+vez|,|\.|$)/i);
   const nombreDetectado = matchNombre?.[1];
 
-  let historialPrevio: any[] = [];
+  // Recuperar historial previo y construir mensajes de contexto
+  const historialMensajes: any[] = [];
   if (nombreDetectado) {
     const { turnos } = await recuperarHistorialCliente(nombreDetectado, 5);
-    historialPrevio = turnos || [];
-    if (turnos && turnos.length > 0) {
-      console.log(`  🧠 ${turnos.length} turnos previos de ${nombreDetectado} cargados`);
-      contextoMemoria = '\n\n# HISTORIAL PREVIO CON ESTE CLIENTE\n' +
-        (turnos as any[]).map((t: any) =>
-          `[${t.created_at}]\nCliente: ${t.mensaje_usuario}\nTú: ${t.respuesta_agente}`
-        ).join('\n---\n') +
-        '\n\nReconoce a este cliente y continúa la relación desde donde quedó. NO empieces desde cero.';
+    const turnosArr = (turnos as any[]) || [];
+    if (turnosArr.length > 0) {
+      console.log(`  🧠 ${turnosArr.length} turnos previos de ${nombreDetectado} cargados`);
+      for (const t of turnosArr) {
+        historialMensajes.push({ role: 'user', content: t.mensaje_usuario });
+        historialMensajes.push({ role: 'assistant', content: t.respuesta_agente });
+      }
     } else {
       console.log(`  🧠 Sin historial previo para ${nombreDetectado}`);
     }
   }
 
   const tools = [
-    { type: 'function', function: { name: 'registrarCliente', description: 'Registra al cliente en Drive. Llama esto en cuanto tengas nombre y tipo de gestión.', parameters: { type: 'object', properties: { nombreCliente: { type: 'string' }, tipoLead: { type: 'string', enum: ['Venta','Captacion','Gestion'] } }, required: ['nombreCliente','tipoLead'] } } },
-    { type: 'function', function: { name: 'guardarConversacion', description: 'Guarda el turno en Drive y Supabase. SIEMPRE llama esto tras responder con el texto exacto de tu respuesta.', parameters: { type: 'object', properties: { docId: { type: 'string', description: 'ID exacto del doc de registrarCliente.' }, clienteNombre: { type: 'string' }, tipoLead: { type: 'string' }, mensajeUsuario: { type: 'string' }, respuestaAgente: { type: 'string' } }, required: ['docId','mensajeUsuario','respuestaAgente'] } } },
+    { type: 'function', function: { name: 'registrarCliente', description: 'Registra al cliente en Drive.', parameters: { type: 'object', properties: { nombreCliente: { type: 'string' }, tipoLead: { type: 'string', enum: ['Venta','Captacion','Gestion'] } }, required: ['nombreCliente','tipoLead'] } } },
+    { type: 'function', function: { name: 'guardarConversacion', description: 'Guarda el turno en Drive y Supabase. SIEMPRE llama esto tras responder.', parameters: { type: 'object', properties: { docId: { type: 'string' }, clienteNombre: { type: 'string' }, tipoLead: { type: 'string' }, mensajeUsuario: { type: 'string' }, respuestaAgente: { type: 'string' } }, required: ['docId','mensajeUsuario','respuestaAgente'] } } },
     { type: 'function', function: { name: 'buscarPropiedades', description: 'Busca propiedades en Supabase.', parameters: { type: 'object', properties: { zona: { type: 'string' }, precioMax: { type: 'number' } } } } },
     { type: 'function', function: { name: 'notificarLeadCRM', description: 'Registra lead en CRM.', parameters: { type: 'object', properties: { nombre: { type: 'string' }, contacto: { type: 'string' }, presupuesto: { type: 'number' }, notasCualificacion: { type: 'string' }, tipoLead: { type: 'string' } }, required: ['nombre','contacto','notasCualificacion'] } } },
   ];
 
-  const historialMensajes: any[] = [];
-  for (const t of historialPrevio) {
-    historialMensajes.push({ role: 'user', content: t.mensaje_usuario });
-    historialMensajes.push({ role: 'assistant', content: t.respuesta_agente });
-  }
-
+  // Historial previo inyectado como mensajes reales — no en system prompt
   const messages: any[] = [
     { role: 'system', content: SYSTEM_PROMPT },
     ...historialMensajes,
@@ -125,7 +120,6 @@ async function testAgenteDirecto(mensaje = 'Hola, soy Carlos García, busco una 
 
   let docId: string | null = null;
   let ultimoTextoHarvis = '';
-  const contexto = { clienteNombre: nombreDetectado };
 
   for (let i = 0; i < 10; i++) {
     const response = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
@@ -153,7 +147,7 @@ async function testAgenteDirecto(mensaje = 'Hola, soy Carlos García, busco una 
       for (const toolCall of assistantMsg.tool_calls) {
         const nombre = toolCall.function.name;
         const args = JSON.parse(toolCall.function.arguments);
-        const resultado = await ejecutarTool(nombre, args, contexto);
+        const resultado = await ejecutarTool(nombre, args, nombreDetectado);
         if (nombre === 'registrarCliente' && resultado.docId) docId = resultado.docId;
         messages.push({ role: 'tool', tool_call_id: toolCall.id, content: JSON.stringify(resultado) });
       }
