@@ -2,6 +2,8 @@ import { SYSTEM_PROMPT } from '../../../agents/realEstateExecutive.js';
 import { searchPropertiesInSupabase } from '../../../tools/supabaseTools.js';
 import { prepararEntornoCliente, actualizarHistorial } from '../../../tools/driveLogger.js';
 import { sendCrmLeadNotification } from '../../../tools/webhookTools.js';
+import { notificarEnrique } from '../../../tools/notificacionTools.js';
+import { notificarEnrique } from '../../../tools/notificacionTools.js';
 
 export const dynamic = 'force-dynamic';
 
