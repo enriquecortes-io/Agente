@@ -131,6 +131,28 @@ export async function POST(req: Request) {
       }
     }
 
+    // Notificar si detectamos email/teléfono y no se notificó
+      const emailMatch = ultimoMensaje.match(/[\w.-]+@[\w.-]+\.[a-z]{2,}/i);
+      const phoneMatch = ultimoMensaje.match(/\+?[\d\s]{9,}/);
+      const nombreMatch = ultimoMensaje.match(/(?:soy|me llamo)\s+([\w\s]{3,30}?)(?:,|\.|\s+(?:busco|quiero|mi))/i);
+      const presupuestoMatch = ultimoMensaje.match(/(\d+)\s*(?:millones?|M€|M eur)/i);
+      
+      if ((emailMatch || phoneMatch) && nombreMatch) {
+        const contacto = emailMatch?.[0] || phoneMatch?.[0] || '';
+        const nombre = nombreMatch?.[1]?.trim() || 'Cliente';
+        const presupuesto = presupuestoMatch ? parseInt(presupuestoMatch[1]) * 1_000_000 : undefined;
+        
+        console.log(`[auto-crm] Detectado lead: ${nombre} / ${contacto}`);
+        sendCrmLeadNotification({ nombre, contacto, presupuesto, notasCualificacion: ultimoMensaje.slice(0, 300), tipoLead: 'Venta' })
+          .then(r => {
+            if (r.success) {
+              notificarEnrique({ nombre, contacto, presupuesto, tipoLead: 'Venta', notasCualificacion: ultimoMensaje.slice(0, 300) })
+                .catch((e: any) => console.error('[Resend]', e.message));
+            }
+          }).catch(() => {});
+      }
+    }
+
     // Auto-log si no se guardó
     if (docId && respuestaFinal && !conversacionGuardada) {
       actualizarHistorial(docId, ultimoMensaje, respuestaFinal).catch(() => {});
