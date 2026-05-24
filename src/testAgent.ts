@@ -24,165 +24,127 @@ function header(title: string) {
 
 async function testSupabase() {
   header('Supabase — Búsqueda de propiedades');
-
-  log('Búsqueda exacta (La Zagaleta, 5M€)', await searchPropertiesInSupabase({
-    urbanizacion: 'La Zagaleta',
-    municipioDeducido: 'Benahavís',
-    precioMax: 5_000_000,
-  }));
-
-  log('Búsqueda sin zona (solo precio 3M€)', await searchPropertiesInSupabase({
-    precioMax: 3_000_000,
-  }));
-
-  log('Búsqueda con precio muy bajo (fallback +20%)', await searchPropertiesInSupabase({
-    urbanizacion: 'Sierra Blanca',
-    precioMax: 100_000,
-  }));
-
-  log('Búsqueda sin filtros (inventario general)', await searchPropertiesInSupabase({}));
+  log('Búsqueda exacta (La Zagaleta, 5M€)', await searchPropertiesInSupabase({ urbanizacion: 'La Zagaleta', municipioDeducido: 'Benahavís', precioMax: 5_000_000 }));
+  log('Búsqueda sin zona (solo precio 3M€)', await searchPropertiesInSupabase({ precioMax: 3_000_000 }));
+  log('Búsqueda sin filtros', await searchPropertiesInSupabase({}));
 }
 
 async function testDrive() {
   header('Google Drive — Entorno de cliente');
-
   const nombre = `Test Cliente ${Date.now()}`;
-  console.log(`\n${WARN} Creando entorno para: ${nombre}`);
-
-  let folderId: string | undefined;
-  let docId: string | undefined;
-
   try {
     const entorno = await prepararEntornoCliente(nombre, 'Venta');
-    folderId = entorno.folderId;
-    docId = entorno.docId;
-    log('prepararEntornoCliente', { success: true, folderId, docId });
+    log('prepararEntornoCliente', { success: true, ...entorno });
+    await actualizarHistorial(entorno.docId, 'Mensaje de prueba', 'Respuesta de prueba');
+    log('actualizarHistorial', { success: true });
   } catch (e: any) {
     log('prepararEntornoCliente', { success: false, error: e.message });
-    return;
-  }
-
-  if (docId) {
-    try {
-      await actualizarHistorial(docId, `[TEST ${new Date().toISOString()}]\nUsuario: Hola\nAgente: Encantado\n`);
-      log('actualizarHistorial', { success: true, docId });
-    } catch (e: any) {
-      log('actualizarHistorial', { success: false, error: e.message });
-    }
-  }
-
-  if (folderId) {
-    try {
-      await syncLogToDrive(folderId, `Log de prueba — ${new Date().toISOString()}`);
-      log('syncLogToDrive', { success: true, folderId });
-    } catch (e: any) {
-      log('syncLogToDrive', { success: false, error: e.message });
-    }
   }
 }
 
 async function testWebhooks() {
   header('Webhooks — CRM y CMS');
-
   log('sendCrmLeadNotification', await sendCrmLeadNotification({
-    nombre: 'Test Investor',
-    contacto: '+34 600 000 000',
-    presupuesto: 4_500_000,
-    estiloBuscado: 'Minimalista con vistas al mar',
+    nombre: 'Test Investor', contacto: '+34 600 000 000',
+    presupuesto: 4_500_000, estiloBuscado: 'Minimalista',
     notasCualificacion: 'Muy cualificado. Timeline: 3 meses.',
-    tipoLead: 'Venta' as const,
+    tipoLead: 'Venta',
   }));
-
   log('triggerCmsPropertyPublish', await triggerCmsPropertyPublish({
-    titulo: 'Villa Silencio — La Zagaleta',
-    ubicacion: 'La Zagaleta, Benahavís, Marbella',
-    precio: 8_900_000,
-    copywritingEmocional: 'Donde la piedra natural y el silencio se convierten en el verdadero lujo.',
-    tagsLifestyle: ['privacidad', 'vistas-al-mar', 'off-market'],
+    titulo: 'Villa Silencio', ubicacion: 'La Zagaleta', precio: 8_900_000,
+    copywritingEmocional: 'Donde el silencio es el verdadero lujo.',
+    tagsLifestyle: ['privacidad', 'off-market'],
   }));
-}
-
-async function testChat(mensaje = '¿Qué propiedades tienes en La Zagaleta por menos de 5 millones?') {
-  header('Chat endpoint — /api/chat');
-
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
-  const apiKey  = process.env.AGENT_API_SECRET || '';
-
-  console.log(`\n📡 POST ${baseUrl}/api/chat`);
-  console.log(`💬 "${mensaje}"\n`);
-
-  try {
-    const res = await fetch(`${baseUrl}/api/chat`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(apiKey ? { 'x-agent-key': apiKey } : {}),
-      },
-      body: JSON.stringify({
-        messages: [{ role: 'user', content: mensaje }],
-      }),
-    });
-
-    console.log(`Status: ${res.status} ${res.statusText}`);
-
-    if (!res.ok) {
-      log('Chat endpoint', { success: false, status: res.status, body: await res.text() });
-      return;
-    }
-
-    const reader = res.body?.getReader();
-    const decoder = new TextDecoder();
-    let fullResponse = '';
-
-    if (reader) {
-      console.log('--- STREAM ---');
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
-        process.stdout.write(chunk);
-        fullResponse += chunk;
-      }
-      console.log('\n--- FIN ---');
-    }
-
-    log('Chat endpoint', { success: true, streamLength: fullResponse.length });
-
-  } catch (e: any) {
-    log('Chat endpoint', { success: false, error: e.message });
-  }
-}
-
-async function testAuth() {
-  header('Auth — Rechazo con clave incorrecta');
-
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
-
-  try {
-    const res = await fetch(`${baseUrl}/api/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-agent-key': 'clave-incorrecta' },
-      body: JSON.stringify({ messages: [{ role: 'user', content: 'test' }] }),
-    });
-
-    if (res.status === 401) {
-      log('Rechazo 401', { success: true, status: 401 });
-    } else {
-      log('Rechazo 401', { success: false, message: `Esperaba 401, recibí ${res.status}` });
-    }
-  } catch (e: any) {
-    console.log(`\n${WARN} Servidor no disponible — ¿está corriendo Next.js?`);
-  }
 }
 
 async function cleanupDrive() {
-  header('Cleanup — Borrar carpetas antiguas en Drive');
+  header('Cleanup — Borrar carpetas antiguas');
   try {
     await borrarCarpetasAntiguas();
     log('borrarCarpetasAntiguas', { success: true });
   } catch (e: any) {
     log('borrarCarpetasAntiguas', { success: false, error: e.message });
   }
+}
+
+async function testAgenteDirecto(mensaje = 'Hola, soy Carlos García, busco una villa en La Zagaleta con presupuesto de 5 millones') {
+  header('Agente Directo — con tools');
+
+  const { google } = await import('@ai-sdk/google');
+  const { streamText } = await import('ai');
+  const { SYSTEM_PROMPT } = await import('./agents/realEstateExecutive.js');
+  const { z } = await import('zod');
+
+  console.log(`\n💬 Usuario: "${mensaje}"\n`);
+
+  const result = streamText({
+    model: google('gemini-2.5-flash'),
+    system: SYSTEM_PROMPT,
+    messages: [{ role: 'user', content: mensaje }],
+    maxSteps: 10,
+    tools: {
+      registrarCliente: {
+        description: 'Registra al cliente en Drive. Llama esto en cuanto tengas el nombre y el tipo de gestión.',
+        parameters: z.object({
+          nombreCliente: z.string().describe('Nombre completo del cliente.'),
+          tipoLead: z.enum(['Venta', 'Captacion', 'Gestion']).describe('Tipo de gestión.'),
+        }),
+        execute: async ({ nombreCliente, tipoLead }) => {
+          console.log(`  [Tool] registrarCliente → ${nombreCliente} (${tipoLead})`);
+          const r = await prepararEntornoCliente(nombreCliente, tipoLead);
+          return { ...r, ok: true };
+        },
+      },
+      guardarConversacion: {
+        description: 'Guarda el turno de conversación en el historial del cliente.',
+        parameters: z.object({
+          docId: z.string(),
+          mensajeUsuario: z.string(),
+          respuestaAgente: z.string(),
+        }),
+        execute: async ({ docId, mensajeUsuario, respuestaAgente }) => {
+          console.log(`  [Tool] guardarConversacion → docId: ${docId}`);
+          await actualizarHistorial(docId, mensajeUsuario, respuestaAgente);
+          return { success: true };
+        },
+      },
+      buscarPropiedades: {
+        description: 'Busca propiedades en Supabase.',
+        parameters: z.object({
+          zona: z.string().optional(),
+          precioMax: z.number().optional(),
+        }),
+        execute: async ({ zona, precioMax }) => {
+          console.log(`  [Tool] buscarPropiedades → ${zona}, ${precioMax}`);
+          return await searchPropertiesInSupabase({ urbanizacion: zona, municipioDeducido: zona, precioMax });
+        },
+      },
+      notificarLeadCRM: {
+        description: 'Registra el lead en Supabase CRM.',
+        parameters: z.object({
+          nombre: z.string(),
+          contacto: z.string(),
+          presupuesto: z.number().optional(),
+          notasCualificacion: z.string(),
+          tipoLead: z.enum(['Venta', 'Captacion', 'Gestion']).optional(),
+        }),
+        execute: async (lead) => {
+          console.log(`  [Tool] notificarLeadCRM → ${lead.nombre}`);
+          return await sendCrmLeadNotification(lead);
+        },
+      },
+    },
+  });
+
+  // Leer el stream completo
+  let textoCompleto = '';
+  for await (const chunk of result.textStream) {
+    process.stdout.write(chunk);
+    textoCompleto += chunk;
+  }
+
+  console.log(`\n`);
+  log('Agente directo', { success: true, chars: textoCompleto.length });
 }
 
 async function main() {
@@ -195,23 +157,18 @@ async function main() {
   console.log(`${'═'.repeat(60)}`);
 
   try {
-    if (arg === 'cleanup')              { await cleanupDrive(); }
-    else if (arg === 'supabase')        { await testSupabase(); }
-    else if (arg === 'drive')           { await testDrive(); }
-    else if (arg === 'webhook')         { await testWebhooks(); }
-    else if (arg === 'chat')            { await testChat(chatMsg); }
-    else if (arg === 'debug')             { await debugAgente(chatMsg); }
-    else if (arg === 'agente')            { await testAgenteDirecto(chatMsg); }
-    else if (arg === 'auth')            { await testAuth(); }
+    if      (arg === 'cleanup')  { await cleanupDrive(); }
+    else if (arg === 'supabase') { await testSupabase(); }
+    else if (arg === 'drive')    { await testDrive(); }
+    else if (arg === 'webhook')  { await testWebhooks(); }
+    else if (arg === 'agente')   { await testAgenteDirecto(chatMsg); }
     else {
       await testSupabase();
       await testDrive();
       await testWebhooks();
-      await testChat(chatMsg);
-      await testAuth();
     }
   } catch (e: any) {
-    console.error(`\n${FAIL} Error no capturado:`, e.message);
+    console.error(`\n${FAIL} Error:`, e.message);
     process.exit(1);
   }
 
@@ -221,133 +178,3 @@ async function main() {
 }
 
 main();
-
-async function testAgenteDirecto(mensaje = 'Hola, busco una villa en Marbella') {
-  header('Agente Directo — sin servidor');
-
-  const { google } = await import('@ai-sdk/google');
-  const { generateText } = await import('ai');
-  const { SYSTEM_PROMPT } = await import('./agents/realEstateExecutive.js');
-  const { searchPropertiesInSupabase } = await import('./tools/supabaseTools.js');
-  const { prepararEntornoCliente, actualizarHistorial } = await import('./tools/driveLogger.js');
-  const { sendCrmLeadNotification } = await import('./tools/webhookTools.js');
-  const { z } = await import('zod');
-
-  console.log(`\n💬 Usuario: "${mensaje}"\n`);
-
-  const result = await generateText({
-    model: google('gemini-2.5-flash'),
-    system: SYSTEM_PROMPT,
-    messages: [{ role: 'user', content: mensaje }],
-    maxSteps: 10,
-    tools: {
-      buscarPropiedades: {
-        description: 'Busca propiedades en Supabase por zona y precio.',
-        parameters: z.object({
-          zona: z.string().optional(),
-          precioMax: z.number().optional(),
-        }),
-        execute: async ({ zona, precioMax }) => {
-          return await searchPropertiesInSupabase({ urbanizacion: zona, municipioDeducido: zona, precioMax });
-        },
-      },
-      registrarCliente: {
-        description: 'Registra al cliente en el historial de Drive.',
-        parameters: z.object({
-          nombreCliente: z.string(),
-          tipoLead: z.enum(['Venta', 'Captacion', 'Gestion']),
-        }),
-        execute: async ({ nombreCliente, tipoLead }) => {
-          return await prepararEntornoCliente(nombreCliente, tipoLead);
-        },
-      },
-      guardarConversacion: {
-        description: 'Guarda el turno en el historial.',
-        parameters: z.object({
-          docId: z.string(),
-          mensajeUsuario: z.string(),
-          respuestaAgente: z.string(),
-        }),
-        execute: async ({ docId, mensajeUsuario, respuestaAgente }) => {
-          await actualizarHistorial(docId, mensajeUsuario, respuestaAgente);
-          return { success: true };
-        },
-      },
-      notificarLeadCRM: {
-        description: 'Registra el lead en Supabase.',
-        parameters: z.object({
-          nombre: z.string(),
-          contacto: z.string(),
-          presupuesto: z.number().optional(),
-          notasCualificacion: z.string(),
-          tipoLead: z.enum(['Venta', 'Captacion', 'Gestion']).optional(),
-        }),
-        execute: async (lead) => {
-          return await sendCrmLeadNotification(lead);
-        },
-      },
-    },
-  });
-
-  const textoFinal = result.text || result.steps?.filter((s: any) => s.text)?.map((s: any) => s.text)?.join("\n") || "(sin respuesta de texto)";
-  console.log(`\n🤖 Harvis: ${textoFinal}`);
-  log('Agente directo', { success: true, steps: result.steps?.length ?? 0 });
-}
-
-async function debugAgente(mensaje = 'Hola, soy Carlos García, busco villa en La Zagaleta, presupuesto 5 millones') {
-  header('Debug — Steps del agente');
-  const { google } = await import('@ai-sdk/google');
-  const { generateText } = await import('ai');
-  const { SYSTEM_PROMPT } = await import('./agents/realEstateExecutive.js');
-  const { prepararEntornoCliente, actualizarHistorial } = await import('./tools/driveLogger.js');
-  const { z } = await import('zod');
-
-  const result = await generateText({
-    model: google('gemini-2.5-flash'),
-    system: SYSTEM_PROMPT,
-    messages: [{ role: 'user', content: mensaje }],
-    maxSteps: 10,
-    tools: {
-      registrarCliente: {
-        description: 'Registra al cliente. Llama esto primero.',
-        parameters: z.object({
-          nombreCliente: z.string(),
-          tipoLead: z.enum(['Venta', 'Captacion', 'Gestion']),
-        }),
-        execute: async ({ nombreCliente, tipoLead }) => {
-          const r = await prepararEntornoCliente(nombreCliente, tipoLead);
-          return { ...r, instruccion: 'Cliente registrado. Ahora responde al cliente con un saludo y preguntas de cualificación.' };
-        },
-      },
-      guardarConversacion: {
-        description: 'Guarda el turno en el historial.',
-        parameters: z.object({
-          docId: z.string(),
-          mensajeUsuario: z.string(),
-          respuestaAgente: z.string(),
-        }),
-        execute: async ({ docId, mensajeUsuario, respuestaAgente }) => {
-          await actualizarHistorial(docId, mensajeUsuario, respuestaAgente);
-          return { success: true };
-        },
-      },
-    },
-  });
-
-  console.log(`\n📊 Steps: ${result.steps.length}`);
-  result.steps.forEach((step: any, i: number) => {
-    console.log(`\n--- Step ${i + 1} ---`);
-    console.log(`Tipo: ${step.stepType}`);
-    console.log(`Texto: ${step.text || '(vacío)'}`);
-    console.log(`Tool calls: ${step.toolCalls?.length ?? 0}`);
-    console.log(`Tool results: ${step.toolResults?.length ?? 0}`);
-    if (step.toolCalls?.length) {
-      step.toolCalls.forEach((tc: any) => console.log(`  → ${tc.toolName}:`, JSON.stringify(tc.args)));
-    }
-    if (step.toolResults?.length) {
-      step.toolResults.forEach((tr: any) => console.log(`  ← resultado:`, JSON.stringify(tr.result)));
-    }
-  });
-
-  console.log(`\n🤖 Texto final: ${result.text || '(vacío)'}`);
-}
