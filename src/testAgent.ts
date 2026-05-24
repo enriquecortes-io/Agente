@@ -64,6 +64,8 @@ async function testDrive() {
   let folderId: string | undefined;
   let docId: string | undefined;
 
+  if (arg === 'cleanup') { await borrarCarpetasAntiguas(); return; }
+
   try {
     const entorno = await prepararEntornoCliente(nombre, 'Venta');
     folderId = entorno.folderId;
@@ -75,7 +77,9 @@ async function testDrive() {
   }
 
   if (docId) {
-    try {
+    if (arg === 'cleanup') { await borrarCarpetasAntiguas(); return; }
+
+  try {
       await actualizarHistorial(docId, `[TEST ${new Date().toISOString()}]\nUsuario: Hola\nAgente: Encantado\n`);
       log('actualizarHistorial', { success: true, docId });
     } catch (e: any) {
@@ -84,7 +88,9 @@ async function testDrive() {
   }
 
   if (folderId) {
-    try {
+    if (arg === 'cleanup') { await borrarCarpetasAntiguas(); return; }
+
+  try {
       await syncLogToDrive(folderId, `Log de prueba — ${new Date().toISOString()}`);
       log('syncLogToDrive', { success: true, folderId });
     } catch (e: any) {
@@ -121,6 +127,8 @@ async function testChat(mensaje = '¿Qué propiedades tienes en La Zagaleta por 
 
   console.log(`\n📡 POST ${baseUrl}/api/chat`);
   console.log(`💬 "${mensaje}"\n`);
+
+  if (arg === 'cleanup') { await borrarCarpetasAntiguas(); return; }
 
   try {
     const res = await fetch(`${baseUrl}/api/chat`, {
@@ -169,6 +177,8 @@ async function testAuth() {
 
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
 
+  if (arg === 'cleanup') { await borrarCarpetasAntiguas(); return; }
+
   try {
     const res = await fetch(`${baseUrl}/api/chat`, {
       method: 'POST',
@@ -194,6 +204,8 @@ async function main() {
   console.log(`  🏠 AGENTE REAL ESTATE — TEST SUITE`);
   console.log(`  ${new Date().toLocaleString('es-ES')}`);
   console.log(`${'═'.repeat(60)}`);
+
+  if (arg === 'cleanup') { await borrarCarpetasAntiguas(); return; }
 
   try {
     if (!arg || arg === 'supabase') await testSupabase();
