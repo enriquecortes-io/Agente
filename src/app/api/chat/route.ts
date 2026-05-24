@@ -1,96 +1,154 @@
 import { google } from '@ai-sdk/google';
 import { streamText, convertToCoreMessages } from 'ai';
+import { z } from 'zod';
 import { SYSTEM_PROMPT } from '../../../agents/realEstateExecutive.js';
 import { searchPropertiesInSupabase } from '../../../tools/supabaseTools.js';
-import { createClientFolder } from '../../../tools/googleDriveTools.js';
+import { prepararEntornoCliente, actualizarHistorial } from '../../../tools/driveLogger.js';
 import { sendCrmLeadNotification, triggerCmsPropertyPublish } from '../../../tools/webhookTools.js';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST(req: Request) {
-  try {
-    const { messages } = await req.json();
+function isAuthorized(req: Request): boolean {
+  const secret = process.env.AGENT_API_SECRET;
+  if (!secret) return true;
+  return req.headers.get('x-agent-key') === secret;
+}
 
+export async function POST(req: Request) {
+  if (!isAuthorized(req)) {
+    return new Response(JSON.stringify({ error: 'No autorizado.' }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  let messages: unknown;
+  try {
+    ({ messages } = await req.json());
+  } catch {
+    return new Response(JSON.stringify({ error: 'Body inválido.' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  const requestId = crypto.randomUUID().slice(0, 8);
+
+  try {
     const result = await streamText({
       model: google('gemini-2.5-flash'),
       system: SYSTEM_PROMPT,
-      messages: convertToCoreMessages(messages),
-      // El arsenal completo de herramientas del agente de élite
+      messages: convertToCoreMessages(messages as any),
+      maxSteps: 5,
       tools: {
-        buscarPropiedades: {
-          description: 'Consulta el inventario disponible en Supabase filtrando por ubicación, presupuesto máximo y estilo de vida.',
-          parameters: {
-            type: 'object',
-            properties: {
-              zona: { type: 'string', description: 'Ubicación en Marbella (ej: La Zagaleta, Sierra Blanca, Nueva Andalucía).' },
-              precioMax: { type: 'number', description: 'Presupuesto máximo en euros.' },
-              estilo: { type: 'string', description: 'Estilo arquitectónico o tags de ambiente (ej: minimalista, vistas al mar).' }
+
+        // ── TOOL: Registrar cliente y clasificar lead ─────────────────────────
+        // Harvis llama a esta tool en cuanto conoce el nombre del cliente
+        // y ha detectado el tipo de gestión (Venta, Captacion, Gestion)
+        registrarCliente: {
+          description: `Registra al cliente en Google Drive creando su carpeta y doc de historial.
+Llama a esta tool en cuanto sepas el nombre del cliente y el tipo de gestión:
+- Venta: el cliente quiere comprar una propiedad
+- Captacion: el cliente quiere vender o valorar su propiedad
+- Gestion: cualquier otro asunto administrativo
+La carpeta y el doc son únicos por cliente — si ya existen los reutiliza.`,
+          parameters: z.object({
+            nombreCliente: z.string().describe('Nombre completo del cliente tal como se ha presentado.'),
+            tipoLead: z.enum(['Venta', 'Captacion', 'Gestion']).describe('Tipo de gestión detectado.'),
+          }),
+          execute: async ({ nombreCliente, tipoLead }) => {
+            console.log(`[${requestId}] registrarCliente → ${nombreCliente} (${tipoLead})`);
+            try {
+              const entorno = await prepararEntornoCliente(nombreCliente, tipoLead);
+              return { success: true, ...entorno, mensaje: `Entorno de ${nombreCliente} listo en Drive.` };
+            } catch (e: any) {
+              return { success: false, error: e.message };
             }
           },
-          execute: async ({ zona, precioMax, estilo }) => {
-            console.log(`[Core] Tool Buscar: ${zona}, ${precioMax}, ${estilo}`);
-            return await searchPropertiesInSupabase({ zona, precioMax, estilo });
-          }
         },
-        crearCarpetaCliente: {
-          description: 'Crea un espacio seguro en Google Drive para guardar el KYC, pasaporte o NDA de un inversor cualificado.',
-          parameters: {
-            type: 'object',
-            properties: {
-              nombreCliente: { type: 'string', description: 'Nombre completo del inversor o fondo.' }
-            },
-            required: ['nombreCliente']
+
+        // ── TOOL: Guardar turno de conversación ───────────────────────────────
+        guardarConversacion: {
+          description: `Guarda un turno de conversación en el historial del cliente en Drive.
+Llama a esta tool después de cada respuesta relevante para mantener el historial actualizado.
+Requiere el docId obtenido previamente con registrarCliente.`,
+          parameters: z.object({
+            docId: z.string().describe('ID del documento de historial obtenido al registrar el cliente.'),
+            mensajeUsuario: z.string().describe('Mensaje exacto del cliente en este turno.'),
+            respuestaAgente: z.string().describe('Resumen de tu respuesta en este turno.'),
+          }),
+          execute: async ({ docId, mensajeUsuario, respuestaAgente }) => {
+            console.log(`[${requestId}] guardarConversacion → docId: ${docId}`);
+            try {
+              await actualizarHistorial(docId, mensajeUsuario, respuestaAgente);
+              return { success: true, mensaje: 'Turno guardado en historial.' };
+            } catch (e: any) {
+              return { success: false, error: e.message };
+            }
           },
-          execute: async ({ nombreCliente }) => {
-            console.log(`[Core] Tool Drive: ${nombreCliente}`);
-            return await createClientFolder(nombreCliente);
-          }
         },
+
+        // ── TOOL: Buscar Propiedades ──────────────────────────────────────────
+        buscarPropiedades: {
+          description: 'Consulta el inventario disponible en Supabase filtrando por ubicación y presupuesto.',
+          parameters: z.object({
+            zona: z.string().optional().describe('Zona en Marbella (ej: La Zagaleta, Sierra Blanca).'),
+            precioMax: z.number().optional().describe('Presupuesto máximo en euros.'),
+            estilo: z.string().optional().describe('Estilo arquitectónico o lifestyle.'),
+          }),
+          execute: async ({ zona, precioMax }) => {
+            console.log(`[${requestId}] buscarPropiedades → zona: ${zona}, precioMax: ${precioMax}`);
+            return await searchPropertiesInSupabase({
+              urbanizacion: zona,
+              municipioDeducido: zona,
+              precioMax,
+            });
+          },
+        },
+
+        // ── TOOL: Notificar Lead CRM ──────────────────────────────────────────
         notificarLeadCRM: {
-          description: 'Sincroniza un perfil de inversor cualificado orgánicamente enviando sus datos esenciales al CRM corporativo.',
-          parameters: {
-            type: 'object',
-            properties: {
-              nombre: { type: 'string', description: 'Nombre completo del lead.' },
-              contacto: { type: 'string', description: 'Número de WhatsApp, teléfono o email.' },
-              presupuesto: { type: 'number', description: 'Presupuesto máximo detectado.' },
-              estiloBuscado: { type: 'string', description: 'Preferencias de diseño o lifestyle.' },
-              notasCualificacion: { type: 'string', description: 'Resumen cualitativo de la conversación y urgencia del cliente.' }
-            },
-            required: ['nombre', 'contacto', 'notasCualificacion']
-          },
+          description: 'Envía el perfil del inversor cualificado al CRM corporativo.',
+          parameters: z.object({
+            nombre: z.string(),
+            contacto: z.string(),
+            presupuesto: z.number().optional(),
+            estiloBuscado: z.string().optional(),
+            notasCualificacion: z.string(),
+          }),
           execute: async (leadData) => {
-            console.log(`[Core] Tool CRM: Enviando lead ${leadData.nombre}`);
+            console.log(`[${requestId}] notificarLeadCRM → ${leadData.nombre}`);
             return await sendCrmLeadNotification(leadData);
-          }
-        },
-        publicarPropiedadCMS: {
-          description: 'Inyecta el copywriting emocional y la ficha técnica de una propiedad directamente en el CMS de la web para su publicación.',
-          parameters: {
-            type: 'object',
-            properties: {
-              titulo: { type: 'string', description: 'Título comercial de la propiedad de lujo.' },
-              ubicacion: { type: 'string', description: 'Dirección o zona exacta en Marbella.' },
-              precio: { type: 'number', description: 'Precio de salida al mercado en euros.' },
-              copywritingEmocional: { type: 'string', description: 'Narrativa persuasiva centrada en la luz, los materiales y la exclusividad.' },
-              tagsLifestyle: { type: 'array', items: { type: 'string' }, description: 'Tags de estilo de vida.' }
-            },
-            required: ['titulo', 'ubicacion', 'precio', 'copywritingEmocional']
           },
+        },
+
+        // ── TOOL: Publicar Propiedad CMS ──────────────────────────────────────
+        publicarPropiedadCMS: {
+          description: 'Publica el copywriting de una propiedad en el CMS de la web.',
+          parameters: z.object({
+            titulo: z.string(),
+            ubicacion: z.string(),
+            precio: z.number(),
+            copywritingEmocional: z.string(),
+            tagsLifestyle: z.array(z.string()).optional(),
+          }),
           execute: async (propertyData) => {
-            console.log(`[Core] Tool CMS: Publicando propiedad ${propertyData.titulo}`);
-            return await triggerCmsPropertyPublish(propertyData);
-          }
-        }
-      }
+            console.log(`[${requestId}] publicarPropiedadCMS → ${propertyData.titulo}`);
+            return await triggerCmsPropertyPublish({
+              ...propertyData,
+              tagsLifestyle: propertyData.tagsLifestyle ?? [],
+            });
+          },
+        },
+      },
     });
 
     return result.toDataStreamResponse();
 
   } catch (error) {
-    console.error('Error crítico en el core del agente:', error);
+    console.error(`[${requestId}] Error crítico:`, error);
     return new Response(
-      JSON.stringify({ error: 'Hubo un problema en el orquestador del agente.' }), 
+      JSON.stringify({ error: 'Error en el orquestador del agente.' }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     );
   }
