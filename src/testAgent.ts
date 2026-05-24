@@ -200,6 +200,7 @@ async function main() {
     else if (arg === 'drive')           { await testDrive(); }
     else if (arg === 'webhook')         { await testWebhooks(); }
     else if (arg === 'chat')            { await testChat(chatMsg); }
+    else if (arg === 'debug')             { await debugAgente(chatMsg); }
     else if (arg === 'agente')            { await testAgenteDirecto(chatMsg); }
     else if (arg === 'auth')            { await testAuth(); }
     else {
@@ -291,4 +292,62 @@ async function testAgenteDirecto(mensaje = 'Hola, busco una villa en Marbella') 
   const textoFinal = result.text || result.steps?.filter((s: any) => s.text)?.map((s: any) => s.text)?.join("\n") || "(sin respuesta de texto)";
   console.log(`\n🤖 Harvis: ${textoFinal}`);
   log('Agente directo', { success: true, steps: result.steps?.length ?? 0 });
+}
+
+async function debugAgente(mensaje = 'Hola, soy Carlos García, busco villa en La Zagaleta, presupuesto 5 millones') {
+  header('Debug — Steps del agente');
+  const { google } = await import('@ai-sdk/google');
+  const { generateText } = await import('ai');
+  const { SYSTEM_PROMPT } = await import('./agents/realEstateExecutive.js');
+  const { prepararEntornoCliente, actualizarHistorial } = await import('./tools/driveLogger.js');
+  const { z } = await import('zod');
+
+  const result = await generateText({
+    model: google('gemini-2.5-flash'),
+    system: SYSTEM_PROMPT,
+    messages: [{ role: 'user', content: mensaje }],
+    maxSteps: 10,
+    tools: {
+      registrarCliente: {
+        description: 'Registra al cliente. Llama esto primero.',
+        parameters: z.object({
+          nombreCliente: z.string(),
+          tipoLead: z.enum(['Venta', 'Captacion', 'Gestion']),
+        }),
+        execute: async ({ nombreCliente, tipoLead }) => {
+          const r = await prepararEntornoCliente(nombreCliente, tipoLead);
+          return { ...r, instruccion: 'Cliente registrado. Ahora responde al cliente con un saludo y preguntas de cualificación.' };
+        },
+      },
+      guardarConversacion: {
+        description: 'Guarda el turno en el historial.',
+        parameters: z.object({
+          docId: z.string(),
+          mensajeUsuario: z.string(),
+          respuestaAgente: z.string(),
+        }),
+        execute: async ({ docId, mensajeUsuario, respuestaAgente }) => {
+          await actualizarHistorial(docId, mensajeUsuario, respuestaAgente);
+          return { success: true };
+        },
+      },
+    },
+  });
+
+  console.log(`\n📊 Steps: ${result.steps.length}`);
+  result.steps.forEach((step: any, i: number) => {
+    console.log(`\n--- Step ${i + 1} ---`);
+    console.log(`Tipo: ${step.stepType}`);
+    console.log(`Texto: ${step.text || '(vacío)'}`);
+    console.log(`Tool calls: ${step.toolCalls?.length ?? 0}`);
+    console.log(`Tool results: ${step.toolResults?.length ?? 0}`);
+    if (step.toolCalls?.length) {
+      step.toolCalls.forEach((tc: any) => console.log(`  → ${tc.toolName}:`, JSON.stringify(tc.args)));
+    }
+    if (step.toolResults?.length) {
+      step.toolResults.forEach((tr: any) => console.log(`  ← resultado:`, JSON.stringify(tr.result)));
+    }
+  });
+
+  console.log(`\n🤖 Texto final: ${result.text || '(vacío)'}`);
 }
