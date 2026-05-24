@@ -7,7 +7,7 @@ const supabaseUrl = process.env.SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_ANON_KEY || '';
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-export async function searchPropertiesInSupabase(args: { zona?: string; precioMax?: number }) {
+export async function searchPropertiesInSupabase(args: { urbanizacion?: string; municipioDeducido?: string; precioMax?: number }) {
   try {
     if (!supabaseUrl || !supabaseKey) {
       return { success: false, error: 'Faltan credenciales de Supabase en .env.local' };
@@ -19,16 +19,21 @@ export async function searchPropertiesInSupabase(args: { zona?: string; precioMa
       .eq('activa', true)
       .limit(5);
 
-    // CEREBRO GEOGRÁFICO: Expansión de zonas
-    if (args.zona) {
-      const zonaBuscada = args.zona.toLowerCase();
-      
-      // Si busca Zagaleta, abrimos el abanico a Benahavis en la columna 'zona' o 'ubicacion'
-      if (zonaBuscada.includes('zagaleta')) {
-        query = query.or(`ubicacion.ilike.%zagaleta%,zona.ilike.%zagaleta%,ubicacion.ilike.%benahavis%,zona.ilike.%benahavis%`);
-      } else {
-        query = query.or(`ubicacion.ilike.%${args.zona}%,zona.ilike.%${args.zona}%`);
-      }
+    // 🧠 BÚSQUEDA DINÁMICA: Usamos tanto la urba como el municipio deducido
+    const orConditions = [];
+    
+    if (args.urbanizacion && args.urbanizacion !== 'undefined') {
+      const urba = args.urbanizacion.toLowerCase();
+      orConditions.push(`ubicacion.ilike.%${urba}%,zona.ilike.%${urba}%`);
+    }
+    
+    if (args.municipioDeducido && args.municipioDeducido !== 'undefined') {
+      const muni = args.municipioDeducido.toLowerCase();
+      orConditions.push(`zona.ilike.%${muni}%,ubicacion.ilike.%${muni}%`);
+    }
+
+    if (orConditions.length > 0) {
+      query = query.or(orConditions.join(','));
     }
 
     if (args.precioMax) {
@@ -41,10 +46,10 @@ export async function searchPropertiesInSupabase(args: { zona?: string; precioMa
 
     const propiedadesFormateadas = data.map(p => ({
       referencia: p.referencia || 'N/A',
-      titulo: typeof p.titulo === 'object' && p.titulo !== null ? (p.titulo.es || p.titulo.en) : p.titulo,
+      titulo: typeof p.titulo === 'object' && p.titulo !== null ? (p.titulo.es || p.titulo.en || JSON.stringify(p.titulo)) : p.titulo,
       precio: p.precio,
-      ubicacion: p.ubicacion,
-      zona: p.zona
+      municipio_bd: p.zona,
+      ubicacion_bd: p.ubicacion
     }));
 
     return { success: true, cantidad: propiedadesFormateadas.length, propiedades: propiedadesFormateadas };
