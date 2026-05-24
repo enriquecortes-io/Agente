@@ -18,32 +18,55 @@ function getDriveService() {
 
 export type TipoLead = 'Venta' | 'Captacion' | 'Gestion';
 
+/**
+ * Prepara entorno del cliente:
+ * - Una sola carpeta por cliente (busca antes de crear)
+ * - Un solo Google Doc por cliente (busca antes de crear)
+ * - Nunca genera duplicados
+ */
 export async function prepararEntornoCliente(nombreCliente: string, tipoLead: TipoLead) {
   const drive = getDriveService();
-  const folderName = `[${tipoLead}] Cliente - ${nombreCliente}`;
+  const folderName = `[${tipoLead}] ${nombreCliente}`;
   const parentId = process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID;
 
-  const folderQuery = parentId
-    ? `name='${folderName}' and mimeType='application/vnd.google-apps.folder' and '${parentId}' in parents and trashed=false`
-    : `name='${folderName}' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
+  // 1. Buscar carpeta del cliente — primero con el tipo, luego sin tipo por si existe de antes
+  const queries = [
+    `name='${folderName}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+    `name contains '${nombreCliente}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+  ];
 
-  const folderRes = await drive.files.list({ q: folderQuery, fields: 'files(id)' });
-  let folderId = folderRes.data.files?.[0]?.id;
+  let folderId: string | undefined;
 
+  for (const q of queries) {
+    const fullQ = parentId ? `${q} and '${parentId}' in parents` : q;
+    const res = await drive.files.list({ q: fullQ, fields: 'files(id, name)' });
+    if (res.data.files && res.data.files.length > 0) {
+      folderId = res.data.files[0].id!;
+      console.log(`[Drive] Carpeta existente encontrada: ${res.data.files[0].name}`);
+      break;
+    }
+  }
+
+  // 2. Si no existe, crear carpeta
   if (!folderId) {
-    const folderMeta: any = { name: folderName, mimeType: 'application/vnd.google-apps.folder' };
+    const folderMeta: any = {
+      name: folderName,
+      mimeType: 'application/vnd.google-apps.folder',
+    };
     if (parentId) folderMeta.parents = [parentId];
     const folder = await drive.files.create({ requestBody: folderMeta, fields: 'id' });
     folderId = folder.data.id!;
     console.log(`[Drive] Carpeta creada: ${folderName}`);
   }
 
+  // 3. Buscar doc de historial existente
   const docRes = await drive.files.list({
     q: `'${folderId}' in parents and name='Historial_Conversacion' and trashed=false`,
     fields: 'files(id)',
   });
   let docId = docRes.data.files?.[0]?.id;
 
+  // 4. Si no existe, crear doc
   if (!docId) {
     const doc = await drive.files.create({
       requestBody: {
@@ -54,22 +77,57 @@ export async function prepararEntornoCliente(nombreCliente: string, tipoLead: Ti
       fields: 'id',
     });
     docId = doc.data.id!;
-    console.log(`[Drive] Doc maestro creado en ${folderName}`);
+    console.log(`[Drive] Doc Historial_Conversacion creado`);
   }
 
   return { folderId, docId };
 }
 
-export async function actualizarHistorial(docId: string, textoCompleto: string) {
+/**
+ * Añade un nuevo bloque al historial del cliente con timestamp.
+ * Lee el contenido actual y concatena — nunca sobreescribe el histórico.
+ */
+export async function actualizarHistorial(docId: string, mensajeUsuario: string, respuestaAgente: string) {
   const drive = getDriveService();
+
+  // Leer contenido actual del doc
+  let contenidoActual = '';
+  try {
+    const res = await drive.files.export({ fileId: docId, mimeType: 'text/plain' });
+    contenidoActual = typeof res.data === 'string' ? res.data : '';
+  } catch {
+    contenidoActual = '';
+  }
+
+  // Construir nuevo bloque con timestamp
+  const timestamp = new Date().toLocaleString('es-ES', {
+    timeZone: 'Europe/Madrid',
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+  });
+
+  const nuevoBloque = `
+────────────────────────────────────────
+📅 ${timestamp}
+👤 Cliente: ${mensajeUsuario}
+🤖 Harvis: ${respuestaAgente}
+`;
+
+  const contenidoCompleto = contenidoActual + nuevoBloque;
+
+  // Actualizar el doc con el historial completo
   await drive.files.update({
     fileId: docId,
     uploadType: 'media',
-    media: { mimeType: 'text/plain', body: textoCompleto },
+    media: { mimeType: 'text/plain', body: contenidoCompleto },
   });
-  console.log(`[Drive] Historial actualizado -> docId: ${docId}`);
+
+  console.log(`[Drive] Historial actualizado — ${timestamp}`);
 }
 
+/**
+ * Alias para compatibilidad con imports existentes
+ */
 export async function syncLogToDrive(folderId: string, content: string) {
   const drive = getDriveService();
 
@@ -83,20 +141,21 @@ export async function syncLogToDrive(folderId: string, content: string) {
 
   if (existingFile?.id) {
     await drive.files.update({ fileId: existingFile.id, media });
-    console.log(`[Drive] Log actualizado en carpeta ${folderId}`);
   } else {
     await drive.files.create({
       requestBody: { name: 'Log_Conversacion.txt', parents: [folderId] },
       media,
     });
-    console.log(`[Drive] Log creado en carpeta ${folderId}`);
   }
 }
 
+/**
+ * Limpieza de carpetas antiguas de test
+ */
 export async function borrarCarpetasAntiguas() {
   const drive = getDriveService();
   const res = await drive.files.list({
-    q: "name contains 'Cliente - ' and mimeType='application/vnd.google-apps.folder' and trashed=false",
+    q: "name contains 'Cliente' and mimeType='application/vnd.google-apps.folder' and trashed=false",
     fields: 'files(id, name)',
   });
 
