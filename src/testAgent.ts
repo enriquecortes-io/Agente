@@ -9,27 +9,36 @@ dotenv.config({ path: '.env.local' });
 
 const tools = {
   buscarPropiedades: tool({
-    description: 'Obligatorio para buscar propiedades. Extrae TODAS las zonas, deduce los municipios y el presupuesto.',
-    // 🚀 EL FIX: Usamos z.array(z.string()) para que soporte múltiples zonas sin colapsar y z.number() directo
+    description: 'Obligatorio para buscar propiedades. Extrae zonas y presupuestos.',
+    // 🧠 EL HACK: Todo es TEXTO (String). Cero arrays, cero números. Así la IA no falla nunca.
     parameters: z.object({
-      zonas: z.array(z.string()).describe('Lista de TODAS las zonas/urbanizaciones pedidas (ej: ["Sotogrande", "La Zagaleta"])'),
-      municipios: z.array(z.string()).describe('Lista de los municipios a los que pertenecen (ej: ["San Roque", "Benahavis"])'),
-      presupuestoMaximo: z.number().describe('Presupuesto máximo convertido a número puro (ej: Si dice 7M, pon 7000000)')
+      zonas_texto: z.string().describe('Urbanizaciones separadas por coma (ej: "Sotogrande, La Zagaleta")'),
+      municipios_texto: z.string().describe('Municipios deducidos separados por coma (ej: "San Roque, Benahavis")'),
+      presupuesto_texto: z.string().describe('Presupuesto en números como texto (ej: "7000000")')
     }),
     execute: async (args) => {
-      console.log(`\n    🔌 [TOOL SUPABASE] ¡Harvis ha procesado los datos a la perfección!`);
-      console.log(`    📍 Zonas extraídas:    ${args.zonas?.join(', ') || 'Ninguna'}`);
-      console.log(`    🗺️ Municipios (IA):    ${args.municipios?.join(', ') || 'Ninguno'}`);
-      console.log(`    💰 Presupuesto Max:    ${args.presupuestoMaximo || 0}€`);
+      // 1. Calculamos el precio
+      let precioCalculado = 0;
+      if (args.presupuesto_texto) {
+        const strLimpio = args.presupuesto_texto.toLowerCase().replace(/euros|€/g, '').trim();
+        if (strLimpio.includes('m') || strLimpio.includes('millon')) {
+          const numero = parseFloat(strLimpio.replace(/[^\d.,]/g, '').replace(',', '.'));
+          if (!isNaN(numero)) precioCalculado = numero * 1000000;
+        } else {
+          const numero = parseInt(strLimpio.replace(/\D/g, ''));
+          if (!isNaN(numero)) precioCalculado = numero;
+        }
+      }
 
-      // Unimos las listas con comas para que tu script de Supabase las procese
-      const zonasUnidas = args.zonas?.join(',') || '';
-      const municipiosUnidos = args.municipios?.join(',') || '';
+      console.log(`\n    🔌 [TOOL SUPABASE] ¡Harvis ha procesado los datos a la perfección!`);
+      console.log(`    📍 Zonas extraídas:    ${args.zonas_texto}`);
+      console.log(`    🗺️ Municipios (IA):    ${args.municipios_texto}`);
+      console.log(`    💰 Presupuesto Max:    ${precioCalculado}€`);
 
       return await searchPropertiesInSupabase({ 
-        urbanizacion: zonasUnidas, 
-        municipioDeducido: municipiosUnidos, 
-        precioMax: args.presupuestoMaximo 
+        urbanizacion: args.zonas_texto, 
+        municipioDeducido: args.municipios_texto, 
+        precioMax: precioCalculado 
       });
     }
   })
@@ -47,11 +56,11 @@ async function hablarConHarvis(mensajeCliente: string) {
   try {
     const response = await generateText({
       model: google('gemini-2.5-flash'),
-      temperature: 0.1, // Cero creatividad, máxima precisión
-      system: SYSTEM_PROMPT + "\n\nREGLA ESTRICTA: Eres un extractor de datos de alto nivel. Extrae siempre TODAS las zonas mencionadas y el presupuesto máximo en número. Deduce los municipios españoles.",
+      temperature: 0, // Literalmente cero creatividad.
+      system: SYSTEM_PROMPT + "\n\nREGLA: Usa las herramientas. Extrae la info como texto plano.",
       messages: historialChat,
       tools: tools,
-      toolChoice: 'required', // Pistola cargada
+      toolChoice: 'required',
       maxSteps: 5
     });
 
