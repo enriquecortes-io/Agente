@@ -25,27 +25,20 @@ function detectarContacto(mensaje: string) {
   };
 }
 
-async function llamarNvidia(messages: any[], apiKey: string, conTools = true) {
-  const body: any = {
-    model: 'meta/llama-3.3-70b-instruct',
-    messages,
-    max_tokens: 800,
-    temperature: 0.4,
-  };
-  if (conTools) {
-    body.tools = [
-      { type: 'function', function: { name: 'registrarCliente', description: 'Registra al cliente. Llama siempre primero.', parameters: { type: 'object', properties: { nombreCliente: { type: 'string' }, tipoLead: { type: 'string', enum: ['Venta','Captacion','Gestion'] } }, required: ['nombreCliente','tipoLead'] } } },
-      { type: 'function', function: { name: 'buscarPropiedades', description: 'Busca propiedades para leads Venta.', parameters: { type: 'object', properties: { zona: { type: 'string' }, precioMax: { type: 'number' } } } } },
-    ];
-    body.tool_choice = 'auto';
+function construirRespuesta(propiedades: any[], nombreCliente: string | null, zona: string | null): string {
+  if (propiedades.length === 0) {
+    return `Encantado${nombreCliente ? `, ${nombreCliente}` : ''}. En este momento no tenemos propiedades exactas${zona ? ` en ${zona}` : ''}, pero estoy buscando las mejores opciones para ti. ¿Tienes alguna preferencia adicional como número de habitaciones o estilo arquitectónico?`;
   }
-  const res = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) throw new Error(`NVIDIA ${res.status}`);
-  return (await res.json()).choices?.[0]?.message;
+
+  const intro = `Encantado${nombreCliente ? `, ${nombreCliente}` : ''}. He encontrado ${propiedades.length === 1 ? 'esta propiedad' : 'estas propiedades'} que podrían interesarte:\n\n`;
+
+  const lista = propiedades.map((p: any) =>
+    `**${p.titulo}** — ${p.referencia}\n📍 ${p.municipio} · 🛏 ${p.habitaciones} hab · 💰 €${Number(p.precio).toLocaleString('es-ES')}\n🔗 ${p.url}`
+  ).join('\n\n');
+
+  const cierre = '\n\n¿Te gustaría programar una visita privada o necesitas más información sobre alguna de ellas?';
+
+  return intro + lista + cierre;
 }
 
 export async function POST(req: Request) {
@@ -65,7 +58,7 @@ export async function POST(req: Request) {
   const requestId = crypto.randomUUID().slice(0, 8);
   const ultimoMensaje = incomingMessages[incomingMessages.length - 1]?.content || '';
 
-  // Detectar e insertar lead antes de NVIDIA — dispara webhook Supabase
+  // Detectar contacto e insertar lead — dispara webhook Supabase → Resend
   const contacto = detectarContacto(ultimoMensaje);
   if (contacto.nombre && (contacto.email || contacto.phone)) {
     const nombreStr = contacto.nombre;
@@ -84,43 +77,66 @@ export async function POST(req: Request) {
       ...incomingMessages.map((m: any) => ({ role: m.role, content: m.content })),
     ];
 
-    // RONDA 1 — con tools
-    const msg1 = await llamarNvidia(messages, apiKey, true);
-    let respuestaFinal = msg1?.content || '';
-    let docId: string | null = null;
+    // UNA sola llamada a NVIDIA
+    const res = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'meta/llama-3.3-70b-instruct',
+        messages,
+        tools: [
+          { type: 'function', function: { name: 'registrarCliente', description: 'Registra al cliente. Llama siempre primero.', parameters: { type: 'object', properties: { nombreCliente: { type: 'string' }, tipoLead: { type: 'string', enum: ['Venta','Captacion','Gestion'] } }, required: ['nombreCliente','tipoLead'] } } },
+          { type: 'function', function: { name: 'buscarPropiedades', description: 'Busca propiedades para leads Venta.', parameters: { type: 'object', properties: { zona: { type: 'string' }, precioMax: { type: 'number' } } } } },
+        ],
+        tool_choice: 'auto',
+        max_tokens: 800,
+        temperature: 0.4,
+      }),
+    });
 
-    if (msg1?.tool_calls?.length > 0) {
-      // Procesar tools en paralelo
-      const toolResults = await Promise.all(
-        msg1.tool_calls.map(async (toolCall: any) => {
+    if (!res.ok) throw new Error(`NVIDIA ${res.status}`);
+    const data = await res.json();
+    const assistantMsg = data.choices?.[0]?.message;
+    let respuestaFinal = assistantMsg?.content || '';
+    let docId: string | null = null;
+    let propiedadesEncontradas: any[] = [];
+    let zonaDetectada: string | null = null;
+
+    // Procesar tool calls en paralelo
+    if (assistantMsg?.tool_calls?.length > 0) {
+      await Promise.all(
+        assistantMsg.tool_calls.map(async (toolCall: any) => {
           const nombre = toolCall.function.name;
           const args = JSON.parse(toolCall.function.arguments);
           console.log(`[${requestId}] Tool: ${nombre}`);
-          let resultado: any = { success: true };
 
           if (nombre === 'registrarCliente') {
-            resultado = await prepararEntornoCliente(args.nombreCliente, args.tipoLead);
+            const resultado = await prepararEntornoCliente(args.nombreCliente, args.tipoLead);
             if (resultado.docId) docId = resultado.docId;
           } else if (nombre === 'buscarPropiedades') {
-            resultado = await searchPropertiesInSupabase({ urbanizacion: args.zona, municipioDeducido: args.zona, precioMax: args.precioMax });
+            zonaDetectada = args.zona || null;
+            const resultado = await searchPropertiesInSupabase({
+              urbanizacion: args.zona, municipioDeducido: args.zona, precioMax: args.precioMax
+            });
+            if (resultado.propiedades) propiedadesEncontradas = resultado.propiedades;
           }
-          return resultado;
         })
       );
 
-      // RONDA 2 — sin tools, solo para generar texto de respuesta
-      messages.push(msg1);
-      msg1.tool_calls.forEach((tc: any, i: number) => {
-        messages.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify(toolResults[i]) });
-      });
-
-      const msg2 = await llamarNvidia(messages, apiKey, false);
-      respuestaFinal = msg2?.content || '';
+      // Construir respuesta sin segunda llamada a NVIDIA
+      if (!respuestaFinal) {
+        respuestaFinal = construirRespuesta(propiedadesEncontradas, contacto.nombre, zonaDetectada);
+      }
 
       // Auto-log async
       if (docId && respuestaFinal) {
         actualizarHistorial(docId, ultimoMensaje, respuestaFinal).catch(() => {});
       }
+    }
+
+    // Si el modelo respondió en texto directamente (sin tool calls)
+    if (!respuestaFinal) {
+      respuestaFinal = 'Encantado. ¿Con quién tengo el placer de hablar?';
     }
 
     return new Response(
