@@ -25,7 +25,7 @@ export async function notificarEnrique(lead: LeadNotificacion) {
    const emoji = lead.tipoLead === 'Venta' ? '🏠' : lead.tipoLead === 'Captacion' ? '📋' : '⚙️';
 
    const { data, error } = await resend.emails.send({
-     from: 'Harvis <harvis@theeditmarbella.com>',
+     from: 'Harvis <onboarding@resend.dev>',
      to: emailDestino,
      subject: `${emoji} Nuevo lead ${lead.tipoLead} — ${lead.nombre}`,
      html: `
