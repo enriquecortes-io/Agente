@@ -38,7 +38,7 @@ export async function createClientFolder(clientName: string, interactionType: st
         name: clientName,
         mimeType: 'application/vnd.google-apps.folder',
       };
-      if (parentId) clientMeta.parents = [parentId];
+      if (parentId) clientMeta.parents = [parentId] as string[];
 
       const clientFolder = await drive.files.create({ requestBody: clientMeta, fields: 'id' });
       clientFolderId = clientFolder.data.id;
