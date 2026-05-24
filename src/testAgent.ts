@@ -57,55 +57,19 @@ async function cleanupDrive() {
   }
 }
 
-async function ejecutarTool(nombre: string, args: any, clienteNombre?: string): Promise<any> {
-  console.log(`  [Tool] ${nombre} →`, JSON.stringify(args));
-
-  switch (nombre) {
-    case 'registrarCliente':
-      return await prepararEntornoCliente(args.nombreCliente, args.tipoLead);
-
-    case 'guardarConversacion':
-      if (!esDocIdValido(args.docId)) {
-        console.log(`  [⚠️ BLOQUEADO] docId inválido: "${args.docId}" — necesita registrarCliente primero`);
-        return { success: false, error: 'docId inválido. Llama registrarCliente primero para obtener el docId real.' };
-      }
-      await actualizarHistorial(args.docId, args.mensajeUsuario, args.respuestaAgente);
-      await guardarConversacionSupabase({
-        clienteNombre: args.clienteNombre || clienteNombre || 'Desconocido',
-        tipoLead: args.tipoLead,
-        mensajeUsuario: args.mensajeUsuario,
-        respuestaAgente: args.respuestaAgente,
-      });
-      return { success: true };
-
-    case 'buscarPropiedades':
-      return await searchPropertiesInSupabase({
-        urbanizacion: args.zona,
-        municipioDeducido: args.zona,
-        precioMax: args.precioMax,
-      });
-
-    case 'notificarLeadCRM':
-      if (crmNotificado) { console.log('  [⚠️ SKIP] notificarLeadCRM ya ejecutado'); return { success: true }; }
-      crmNotificado = true;
-      return await sendCrmLeadNotification(args);
-
-    default:
-      return { error: `Tool desconocida: ${nombre}` };
-  }
-}
-
 async function testAgenteDirecto(mensaje = 'Hola, soy Carlos García, busco una villa en La Zagaleta con presupuesto de 5 millones') {
-  header('Agente Directo — NVIDIA Nemotron 49B con memoria');
+  header('Agente Directo — NVIDIA con memoria');
 
   const apiKey = process.env.NVIDIA_API_KEY;
   if (!apiKey) throw new Error('Falta NVIDIA_API_KEY en .env.local');
 
   console.log(`\n💬 Usuario: "${mensaje}"\n`);
 
+  // Detectar nombre
   const matchNombre = mensaje.match(/(?:soy|me llamo|habla|es)\s+([A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+){0,2})(?:\s+de\s+nuevo|\s+otra\s+vez|,|\.|$)/i);
   const nombreDetectado = matchNombre?.[1];
 
+  // Recuperar historial
   const historialMensajes: any[] = [];
   if (nombreDetectado) {
     const { turnos } = await recuperarHistorialCliente(nombreDetectado, 5);
@@ -122,10 +86,10 @@ async function testAgenteDirecto(mensaje = 'Hola, soy Carlos García, busco una 
   }
 
   const tools = [
-    { type: 'function', function: { name: 'registrarCliente', description: 'Registra al cliente en Drive. Llama esto SIEMPRE al inicio de cada conversación para obtener el docId real.', parameters: { type: 'object', properties: { nombreCliente: { type: 'string' }, tipoLead: { type: 'string', enum: ['Venta','Captacion','Gestion'] } }, required: ['nombreCliente','tipoLead'] } } },
-    { type: 'function', function: { name: 'guardarConversacion', description: 'Guarda el turno. Requiere el docId real de registrarCliente.', parameters: { type: 'object', properties: { docId: { type: 'string' }, clienteNombre: { type: 'string' }, tipoLead: { type: 'string' }, mensajeUsuario: { type: 'string' }, respuestaAgente: { type: 'string' } }, required: ['docId','mensajeUsuario','respuestaAgente'] } } },
-    { type: 'function', function: { name: 'buscarPropiedades', description: 'Busca propiedades en Supabase.', parameters: { type: 'object', properties: { zona: { type: 'string' }, precioMax: { type: 'number' } } } } },
-    { type: 'function', function: { name: 'notificarLeadCRM', description: 'Registra lead en CRM.', parameters: { type: 'object', properties: { nombre: { type: 'string' }, contacto: { type: 'string' }, presupuesto: { type: 'number' }, notasCualificacion: { type: 'string' }, tipoLead: { type: 'string' } }, required: ['nombre','contacto','notasCualificacion'] } } },
+    { type: 'function', function: { name: 'registrarCliente', description: 'Registra al cliente en Drive. Llama esto SIEMPRE al inicio.', parameters: { type: 'object', properties: { nombreCliente: { type: 'string' }, tipoLead: { type: 'string', enum: ['Venta','Captacion','Gestion'] } }, required: ['nombreCliente','tipoLead'] } } },
+    { type: 'function', function: { name: 'guardarConversacion', description: 'Guarda el turno. Llama esto UNA SOLA VEZ tras responder al cliente.', parameters: { type: 'object', properties: { docId: { type: 'string' }, clienteNombre: { type: 'string' }, tipoLead: { type: 'string' }, mensajeUsuario: { type: 'string' }, respuestaAgente: { type: 'string' } }, required: ['docId','mensajeUsuario','respuestaAgente'] } } },
+    { type: 'function', function: { name: 'buscarPropiedades', description: 'Busca propiedades. Solo para leads de Venta.', parameters: { type: 'object', properties: { zona: { type: 'string' }, precioMax: { type: 'number' } } } } },
+    { type: 'function', function: { name: 'notificarLeadCRM', description: 'Registra lead en CRM. Llama esto UNA SOLA VEZ cuando tengas nombre + contacto + presupuesto.', parameters: { type: 'object', properties: { nombre: { type: 'string' }, contacto: { type: 'string' }, presupuesto: { type: 'number' }, notasCualificacion: { type: 'string' }, tipoLead: { type: 'string' } }, required: ['nombre','contacto','notasCualificacion'] } } },
   ];
 
   const messages: any[] = [
@@ -137,7 +101,7 @@ async function testAgenteDirecto(mensaje = 'Hola, soy Carlos García, busco una 
   let docId: string | null = null;
   let ultimoTextoHarvis = '';
   let crmNotificado = false;
-  let guardarCount = 0;
+  let conversacionGuardada = false;
 
   for (let i = 0; i < 10; i++) {
     const response = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
@@ -165,14 +129,56 @@ async function testAgenteDirecto(mensaje = 'Hola, soy Carlos García, busco una 
       for (const toolCall of assistantMsg.tool_calls) {
         const nombre = toolCall.function.name;
         const args = JSON.parse(toolCall.function.arguments);
-        const resultado = await ejecutarTool(nombre, args, nombreDetectado);
-        if (nombre === 'registrarCliente' && resultado.docId) docId = resultado.docId;
+        console.log(`  [Tool] ${nombre} →`, JSON.stringify(args));
+
+        let resultado: any;
+
+        if (nombre === 'registrarCliente') {
+          resultado = await prepararEntornoCliente(args.nombreCliente, args.tipoLead);
+          if (resultado.docId) docId = resultado.docId;
+
+        } else if (nombre === 'guardarConversacion') {
+          if (conversacionGuardada) {
+            console.log(`  [⚠️ SKIP] guardarConversacion — ya ejecutado`);
+            resultado = { success: true };
+          } else if (!esDocIdValido(args.docId)) {
+            console.log(`  [⚠️ BLOQUEADO] docId inválido: "${args.docId}"`);
+            resultado = { success: false, error: 'docId inválido. Usa el docId de registrarCliente.' };
+          } else {
+            await actualizarHistorial(args.docId, args.mensajeUsuario, args.respuestaAgente);
+            await guardarConversacionSupabase({
+              clienteNombre: args.clienteNombre || nombreDetectado || 'Desconocido',
+              tipoLead: args.tipoLead,
+              mensajeUsuario: args.mensajeUsuario,
+              respuestaAgente: args.respuestaAgente,
+            });
+            conversacionGuardada = true;
+            resultado = { success: true };
+          }
+
+        } else if (nombre === 'buscarPropiedades') {
+          resultado = await searchPropertiesInSupabase({ urbanizacion: args.zona, municipioDeducido: args.zona, precioMax: args.precioMax });
+
+        } else if (nombre === 'notificarLeadCRM') {
+          if (crmNotificado) {
+            console.log(`  [⚠️ SKIP] notificarLeadCRM — ya ejecutado`);
+            resultado = { success: true };
+          } else {
+            resultado = await sendCrmLeadNotification(args);
+            crmNotificado = true;
+          }
+
+        } else {
+          resultado = { error: `Tool desconocida: ${nombre}` };
+        }
+
         messages.push({ role: 'tool', tool_call_id: toolCall.id, content: JSON.stringify(resultado) });
       }
       continue;
     }
 
-    if (docId && ultimoTextoHarvis) {
+    // Auto-log final si no se guardó
+    if (docId && ultimoTextoHarvis && !conversacionGuardada) {
       console.log(`\n  [Auto-log] Drive + Supabase`);
       await actualizarHistorial(docId, mensaje, ultimoTextoHarvis);
       if (nombreDetectado) {
