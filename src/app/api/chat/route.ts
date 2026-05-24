@@ -13,39 +13,16 @@ function isAuthorized(req: Request): boolean {
   return req.headers.get('x-agent-key') === secret;
 }
 
-const TOOLS = [
-  { type: 'function', function: { name: 'registrarCliente', description: 'Registra al cliente en Drive. Llama esto SIEMPRE primero.', parameters: { type: 'object', properties: { nombreCliente: { type: 'string' }, tipoLead: { type: 'string', enum: ['Venta','Captacion','Gestion'] } }, required: ['nombreCliente','tipoLead'] } } },
-  { type: 'function', function: { name: 'buscarPropiedades', description: 'Busca propiedades. Solo para leads Venta.', parameters: { type: 'object', properties: { zona: { type: 'string' }, precioMax: { type: 'number' } } } } },
-  { type: 'function', function: { name: 'notificarLeadCRM', description: 'Registra lead. Llama cuando tengas nombre + contacto + presupuesto.', parameters: { type: 'object', properties: { nombre: { type: 'string' }, contacto: { type: 'string' }, presupuesto: { type: 'number' }, notasCualificacion: { type: 'string' }, tipoLead: { type: 'string' } }, required: ['nombre','contacto','notasCualificacion'] } } },
-  { type: 'function', function: { name: 'guardarConversacion', description: 'Guarda el turno. Llama UNA VEZ al final.', parameters: { type: 'object', properties: { docId: { type: 'string' }, mensajeUsuario: { type: 'string' }, respuestaAgente: { type: 'string' } }, required: ['docId','mensajeUsuario','respuestaAgente'] } } },
-];
-
-async function llamarNvidia(messages: any[], apiKey: string) {
-  const res = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: 'meta/llama-3.3-70b-instruct',
-      messages, tools: TOOLS, tool_choice: 'auto',
-      max_tokens: 800, temperature: 0.4,
-    }),
-  });
-  if (!res.ok) throw new Error(`NVIDIA ${res.status}: ${await res.text()}`);
-  return (await res.json()).choices?.[0]?.message;
-}
-
-// Detectar datos de contacto en el mensaje
 function detectarContacto(mensaje: string) {
   const emailMatch = mensaje.match(/[\w.-]+@[\w.-]+\.[a-z]{2,}/i);
   const phoneMatch = mensaje.match(/\+?[\d\s\-]{9,}/);
   const nombreMatch = mensaje.match(/(?:soy|me llamo)\s+([\w\s]{3,30}?)(?:,|\.|quiero|busco|mi\s)/i);
   const presupuestoMatch = mensaje.match(/(\d+(?:[.,]\d+)?)\s*(?:millones?|M€|M\s*eur)/i);
-
   return {
     email: emailMatch?.[0] || null,
     phone: phoneMatch?.[0]?.trim() || null,
     nombre: nombreMatch?.[1]?.trim() || null,
-    presupuesto: presupuestoMatch ? parseFloat(presupuestoMatch[1].replace(',', '.')) * 1_000_000 : null,
+    presupuesto: presupuestoMatch ? parseFloat(presupuestoMatch[1].replace(',','.')) * 1_000_000 : null,
   };
 }
 
@@ -66,34 +43,19 @@ export async function POST(req: Request) {
   const requestId = crypto.randomUUID().slice(0, 8);
   const ultimoMensaje = incomingMessages[incomingMessages.length - 1]?.content || '';
 
-  // Detectar contacto ANTES de llamar a NVIDIA
+  // Detectar y notificar ANTES — fire and forget
   const contacto = detectarContacto(ultimoMensaje);
-  const tieneContacto = !!(contacto.email || contacto.phone) && !!contacto.nombre;
-
-  // Si tiene contacto, notificar de forma asíncrona sin bloquear
-  if (tieneContacto) {
+  if (contacto.nombre && (contacto.email || contacto.phone)) {
+    const nombreStr = contacto.nombre;
     const contactoStr = contacto.email || contacto.phone || '';
-    const nombreStr = contacto.nombre || 'Cliente';
-    console.log(`[${requestId}] auto-crm detectado: ${nombreStr} / ${contactoStr}`);
-    
-    // Fire and forget — no await
+    console.log(`[${requestId}] auto-crm: ${nombreStr} / ${contactoStr}`);
     sendCrmLeadNotification({
-      nombre: nombreStr,
-      contacto: contactoStr,
+      nombre: nombreStr, contacto: contactoStr,
       presupuesto: contacto.presupuesto || undefined,
-      notasCualificacion: ultimoMensaje.slice(0, 300),
-      tipoLead: 'Venta',
+      notasCualificacion: ultimoMensaje.slice(0, 300), tipoLead: 'Venta',
     }).then((r: any) => {
-      if (r.success) {
-        return notificarEnrique({
-          nombre: nombreStr,
-          contacto: contactoStr,
-          presupuesto: contacto.presupuesto || undefined,
-          tipoLead: 'Venta',
-          notasCualificacion: ultimoMensaje.slice(0, 300),
-        });
-      }
-    }).catch((e: any) => console.error('[auto-crm error]', e.message));
+      if (r.success) notificarEnrique({ nombre: nombreStr, contacto: contactoStr, presupuesto: contacto.presupuesto || undefined, tipoLead: 'Venta', notasCualificacion: ultimoMensaje.slice(0, 300) }).catch(() => {});
+    }).catch(() => {});
   }
 
   try {
@@ -102,18 +64,33 @@ export async function POST(req: Request) {
       ...incomingMessages.map((m: any) => ({ role: m.role, content: m.content })),
     ];
 
+    // UNA SOLA llamada a NVIDIA
+    const res = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'meta/llama-3.3-70b-instruct',
+        messages,
+        tools: [
+          { type: 'function', function: { name: 'registrarCliente', description: 'Registra al cliente. Llama siempre primero.', parameters: { type: 'object', properties: { nombreCliente: { type: 'string' }, tipoLead: { type: 'string', enum: ['Venta','Captacion','Gestion'] } }, required: ['nombreCliente','tipoLead'] } } },
+          { type: 'function', function: { name: 'buscarPropiedades', description: 'Busca propiedades para leads Venta.', parameters: { type: 'object', properties: { zona: { type: 'string' }, precioMax: { type: 'number' } } } } },
+        ],
+        tool_choice: 'auto',
+        max_tokens: 800,
+        temperature: 0.4,
+      }),
+    });
+
+    if (!res.ok) throw new Error(`NVIDIA ${res.status}`);
+    const data = await res.json();
+    const assistantMsg = data.choices?.[0]?.message;
+    let respuestaFinal = assistantMsg?.content || '';
     let docId: string | null = null;
-    let respuestaFinal = '';
-    let conversacionGuardada = false;
 
-    // RONDA 1
-    const msg1 = await llamarNvidia(messages, apiKey);
-    messages.push(msg1);
-    if (msg1.content) respuestaFinal = msg1.content;
-
-    if (msg1.tool_calls?.length > 0) {
+    // Procesar tools en paralelo
+    if (assistantMsg?.tool_calls?.length > 0) {
       const toolResults = await Promise.all(
-        msg1.tool_calls.map(async (toolCall: any) => {
+        assistantMsg.tool_calls.map(async (toolCall: any) => {
           const nombre = toolCall.function.name;
           const args = JSON.parse(toolCall.function.arguments);
           console.log(`[${requestId}] Tool: ${nombre}`);
@@ -124,36 +101,23 @@ export async function POST(req: Request) {
             if (resultado.docId) docId = resultado.docId;
           } else if (nombre === 'buscarPropiedades') {
             resultado = await searchPropertiesInSupabase({ urbanizacion: args.zona, municipioDeducido: args.zona, precioMax: args.precioMax });
-          } else if (nombre === 'notificarLeadCRM') {
-            resultado = { success: true, message: 'Lead registrado.' }; // ya lo hicimos arriba
-          } else if (nombre === 'guardarConversacion' && !conversacionGuardada && args.docId?.length >= 20) {
-            conversacionGuardada = true;
-            await actualizarHistorial(args.docId, args.mensajeUsuario, args.respuestaAgente);
           }
-
-          return { role: 'tool', tool_call_id: toolCall.id, content: JSON.stringify(resultado) };
+          return resultado;
         })
       );
-      toolResults.forEach((r: any) => messages.push(r));
 
-      // RONDA 2
-      const msg2 = await llamarNvidia(messages, apiKey);
-      if (msg2.content) respuestaFinal = msg2.content;
-
-      if (msg2.tool_calls?.length > 0) {
-        for (const toolCall of msg2.tool_calls) {
-          const nombre = toolCall.function.name;
-          const args = JSON.parse(toolCall.function.arguments);
-          if (nombre === 'guardarConversacion' && !conversacionGuardada && args.docId?.length >= 20) {
-            conversacionGuardada = true;
-            await actualizarHistorial(args.docId, args.mensajeUsuario, args.respuestaAgente).catch(() => {});
-          }
-        }
+      // Construir respuesta con propiedades si las hay
+      const propiedades = toolResults.find((r: any) => r.propiedades)?.propiedades || [];
+      if (propiedades.length > 0 && !respuestaFinal) {
+        respuestaFinal = propiedades.map((p: any) =>
+          `**${p.titulo}** — ${p.referencia}\n📍 ${p.municipio} · 🛏 ${p.habitaciones} hab · 💰 €${p.precio?.toLocaleString('es-ES')}\n🔗 ${p.url}`
+        ).join('\n\n');
       }
-    }
 
-    if (docId && respuestaFinal && !conversacionGuardada) {
-      actualizarHistorial(docId, ultimoMensaje, respuestaFinal).catch(() => {});
+      // Auto-log async
+      if (docId) {
+        actualizarHistorial(docId, ultimoMensaje, respuestaFinal).catch(() => {});
+      }
     }
 
     return new Response(
