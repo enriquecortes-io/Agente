@@ -1,20 +1,8 @@
-/**
- * testAgent.ts — Suite de pruebas para el agente de élite
- *
- * Uso:
- *   npx tsx src/testAgent.ts                    → todos los tests
- *   npx tsx src/testAgent.ts supabase           → solo Supabase
- *   npx tsx src/testAgent.ts drive              → solo Drive
- *   npx tsx src/testAgent.ts webhook            → solo Webhooks
- *   npx tsx src/testAgent.ts chat               → solo endpoint /api/chat
- *   npx tsx src/testAgent.ts chat "tu pregunta" → chat con mensaje personalizado
- */
-
 import dotenv from 'dotenv';
 dotenv.config({ path: '.env.local' });
 
 import { searchPropertiesInSupabase } from './tools/supabaseTools.js';
-import { prepararEntornoCliente, actualizarHistorial, syncLogToDrive } from './tools/driveLogger.js';
+import { prepararEntornoCliente, actualizarHistorial, syncLogToDrive, borrarCarpetasAntiguas } from './tools/driveLogger.js';
 import { sendCrmLeadNotification, triggerCmsPropertyPublish } from './tools/webhookTools.js';
 
 const OK   = '✅';
@@ -64,8 +52,6 @@ async function testDrive() {
   let folderId: string | undefined;
   let docId: string | undefined;
 
-  if (arg === 'cleanup') { await borrarCarpetasAntiguas(); return; }
-
   try {
     const entorno = await prepararEntornoCliente(nombre, 'Venta');
     folderId = entorno.folderId;
@@ -77,9 +63,7 @@ async function testDrive() {
   }
 
   if (docId) {
-    if (arg === 'cleanup') { await borrarCarpetasAntiguas(); return; }
-
-  try {
+    try {
       await actualizarHistorial(docId, `[TEST ${new Date().toISOString()}]\nUsuario: Hola\nAgente: Encantado\n`);
       log('actualizarHistorial', { success: true, docId });
     } catch (e: any) {
@@ -88,9 +72,7 @@ async function testDrive() {
   }
 
   if (folderId) {
-    if (arg === 'cleanup') { await borrarCarpetasAntiguas(); return; }
-
-  try {
+    try {
       await syncLogToDrive(folderId, `Log de prueba — ${new Date().toISOString()}`);
       log('syncLogToDrive', { success: true, folderId });
     } catch (e: any) {
@@ -127,8 +109,6 @@ async function testChat(mensaje = '¿Qué propiedades tienes en La Zagaleta por 
 
   console.log(`\n📡 POST ${baseUrl}/api/chat`);
   console.log(`💬 "${mensaje}"\n`);
-
-  if (arg === 'cleanup') { await borrarCarpetasAntiguas(); return; }
 
   try {
     const res = await fetch(`${baseUrl}/api/chat`, {
@@ -177,8 +157,6 @@ async function testAuth() {
 
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
 
-  if (arg === 'cleanup') { await borrarCarpetasAntiguas(); return; }
-
   try {
     const res = await fetch(`${baseUrl}/api/chat`, {
       method: 'POST',
@@ -196,8 +174,18 @@ async function testAuth() {
   }
 }
 
+async function cleanupDrive() {
+  header('Cleanup — Borrar carpetas antiguas en Drive');
+  try {
+    await borrarCarpetasAntiguas();
+    log('borrarCarpetasAntiguas', { success: true });
+  } catch (e: any) {
+    log('borrarCarpetasAntiguas', { success: false, error: e.message });
+  }
+}
+
 async function main() {
-  const arg    = process.argv[2]?.toLowerCase();
+  const arg     = process.argv[2]?.toLowerCase();
   const chatMsg = process.argv[3];
 
   console.log(`\n${'═'.repeat(60)}`);
@@ -205,14 +193,20 @@ async function main() {
   console.log(`  ${new Date().toLocaleString('es-ES')}`);
   console.log(`${'═'.repeat(60)}`);
 
-  if (arg === 'cleanup') { await borrarCarpetasAntiguas(); return; }
-
   try {
-    if (!arg || arg === 'supabase') await testSupabase();
-    if (!arg || arg === 'drive')    await testDrive();
-    if (!arg || arg === 'webhook')  await testWebhooks();
-    if (!arg || arg === 'chat')     await testChat(chatMsg);
-    if (!arg || arg === 'auth')     await testAuth();
+    if (arg === 'cleanup')              { await cleanupDrive(); }
+    else if (arg === 'supabase')        { await testSupabase(); }
+    else if (arg === 'drive')           { await testDrive(); }
+    else if (arg === 'webhook')         { await testWebhooks(); }
+    else if (arg === 'chat')            { await testChat(chatMsg); }
+    else if (arg === 'auth')            { await testAuth(); }
+    else {
+      await testSupabase();
+      await testDrive();
+      await testWebhooks();
+      await testChat(chatMsg);
+      await testAuth();
+    }
   } catch (e: any) {
     console.error(`\n${FAIL} Error no capturado:`, e.message);
     process.exit(1);
