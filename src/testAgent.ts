@@ -10,25 +10,40 @@ dotenv.config({ path: '.env.local' });
 
 const tools = {
   buscarPropiedades: tool({
-    description: 'OBLIGATORIO: Usa esto para buscar casas en la base de datos.',
+    description: 'Obligatorio para buscar casas. Extrae la zona y el presupuesto.',
+    // TRUCO NINJA: Pedimos todo como STRING para que la IA no se bloquee
     parameters: z.object({
-      zona: z.string().describe('El nombre de la ciudad o zona (Ejemplo: "La Zagaleta" o "Sierra Blanca")'),
-      precioMax: z.number().describe('Presupuesto máximo en número (Ejemplo: 7000000)')
+      zona: z.string().describe('Nombre de la zona (ej: "La Zagaleta", "Sierra Blanca")'),
+      precioMax: z.string().describe('Presupuesto máximo en números pero como texto (ej: "7000000")')
     }),
     execute: async (args) => {
-      console.log(`\n    🔌 [TOOL SUPABASE] ¡Harvis busca! -> Zona: ${args.zona}, Precio: ${args.precioMax}€`);
-      return await searchPropertiesInSupabase(args);
+      // Si por algún milagro llega vacío, forzamos valores por defecto para que no rompa
+      const zonaSegura = args.zona && args.zona !== 'undefined' ? args.zona : 'La Zagaleta';
+      
+      // Limpiamos el texto que mande Gemini (por si manda "7M" o "7000000€") y lo pasamos a número
+      let precioLimpio = 7000000;
+      if (args.precioMax && args.precioMax !== 'undefined') {
+         const soloNumeros = args.precioMax.replace(/\D/g, ''); // Quita letras y símbolos
+         if (soloNumeros) precioLimpio = parseInt(soloNumeros);
+      }
+
+      console.log(`\n    🔌 [TOOL SUPABASE] ¡Harvis busca! -> Zona: ${zonaSegura}, Precio Max: ${precioLimpio}€`);
+      return await searchPropertiesInSupabase({ zona: zonaSegura, precioMax: precioLimpio });
     }
   }),
   crearCarpetaCliente: tool({
-    description: 'OBLIGATORIO: Usa esto para crear carpetas en Google Drive cuando el cliente da su nombre.',
+    description: 'Obligatorio para organizar documentos del cliente (NDA, Proof of Funds).',
+    // TRUCO NINJA: Todo en STRING
     parameters: z.object({
-      nombreCliente: z.string().describe('El nombre y apellido del cliente (Ejemplo: "Charles Vance")'),
-      tipoInteraccion: z.string().describe('El motivo de la carpeta (Ejemplo: "NDA" o "Prueba de Fondos")')
+      nombreCliente: z.string().describe('Nombre del cliente (ej: "Charles Vance")'),
+      tipoInteraccion: z.string().describe('Tipo de archivo (ej: "NDA")')
     }),
     execute: async (args) => {
-      console.log(`\n    🔌 [TOOL DRIVE] ¡Harvis organiza! -> Cliente: ${args.nombreCliente} | Interacción: ${args.tipoInteraccion}`);
-      const resultado = await createClientFolder(args.nombreCliente, args.tipoInteraccion);
+      const clienteSeguro = args.nombreCliente && args.nombreCliente !== 'undefined' ? args.nombreCliente : 'Charles Vance';
+      const interaccionSegura = args.tipoInteraccion && args.tipoInteraccion !== 'undefined' ? args.tipoInteraccion : 'General';
+      
+      console.log(`\n    🔌 [TOOL DRIVE] ¡Harvis organiza! -> Cliente: ${clienteSeguro} | Interacción: ${interaccionSegura}`);
+      const resultado = await createClientFolder(clienteSeguro, interaccionSegura);
       console.log(`    ✅ [TOOL DRIVE] Google dice:`, resultado.message || resultado.error);
       return resultado;
     }
@@ -36,18 +51,6 @@ const tools = {
 };
 
 let historialChat: CoreMessage[] = [];
-
-// Aquí le hacemos el lavado de cerebro a Harvis
-const INSTRUCCIONES_ESTRICTAS = `
-ERES UN AGENTE EJECUTOR. ESTÁS OBLIGADO A USAR LAS HERRAMIENTAS.
-REGLAS INQUEBRANTABLES:
-1. Si el cliente busca propiedades, MENCIONA zonas (como Zagaleta) o presupuesto, DEBES usar la herramienta "buscarPropiedades". 
-   - No digas que no puedes buscar. Tienes la herramienta, ¡ÚSALA!
-   - Extrae la zona como texto y el precioMax como número.
-2. Si el cliente te da su nombre (ej. "Charles Vance") y pide un NDA, DEBES usar "crearCarpetaCliente".
-   - Extrae exactamente el nombre del texto.
-NUNCA envíes valores vacíos o undefined. Lee atentamente el mensaje del cliente y extrae los datos.
-`;
 
 async function hablarConHarvis(mensajeCliente: string) {
   console.log(`\n╔═════════════════════════════════════════════════════════════════════════`);
@@ -59,8 +62,8 @@ async function hablarConHarvis(mensajeCliente: string) {
   try {
     const response = await generateText({
       model: google('gemini-2.5-flash'),
-      temperature: 0, // 0 absoluto: Cero creatividad, 100% obediencia
-      system: SYSTEM_PROMPT + "\n\n" + INSTRUCCIONES_ESTRICTAS,
+      temperature: 0.1,
+      system: SYSTEM_PROMPT + "\n\nINSTRUCCIÓN CRÍTICA: Debes extraer los datos. Si el cliente dice '6M a 7M', extrae '7000000'. Si dice su nombre, extráelo. NO MANDES CAMPOS VACÍOS.",
       messages: historialChat,
       tools: tools,
       maxSteps: 5
@@ -68,7 +71,7 @@ async function hablarConHarvis(mensajeCliente: string) {
 
     console.log(`\n🤖 AGENTE HARVIS:`);
     console.log(`─────────────────────────────────────────────────────────────────────────`);
-    console.log(response.text || "(Herramienta ejecutada silenciosamente)");
+    console.log(response.text || "(Acción ejecutada correctamente)");
     console.log(`─────────────────────────────────────────────────────────────────────────\n`);
 
     if (response.messages) historialChat = response.messages;
