@@ -1,11 +1,20 @@
 import { generateObject, generateText, CoreMessage } from 'ai';
-import { google } from '@ai-sdk/google';
+import { createOpenAI } from '@ai-sdk/openai';
 import { z } from 'zod';
 import { searchPropertiesInSupabase } from './tools/supabaseTools.js';
 import { createClientFolder } from './tools/googleDriveTools.js';
 import dotenv from 'dotenv';
 
 dotenv.config({ path: '.env.local' });
+
+// 🧠 CONEXIÓN A NVIDIA NIM
+const nvidia = createOpenAI({
+  baseURL: 'https://integrate.api.nvidia.com/v1',
+  apiKey: process.env.NVIDIA_API_KEY || '',
+});
+
+// 🔥 EL CEREBRO ELEGIDO (El ID exacto que no da 404)
+const modeloNvidia = nvidia('meta/llama-3.1-8b-instruct');
 
 const EsquemaExtractor = z.object({
   requiereBuscarPropiedades: z.boolean(),
@@ -32,10 +41,10 @@ async function hablarConHarvis(mensajeCliente: string) {
 
   try {
     const { object: intencion } = await generateObject({
-      model: google('gemini-2.5-flash'),
+      model: modeloNvidia,
       temperature: 0,
       schema: EsquemaExtractor,
-      system: `Analiza el texto. Deduce municipios de España si nombran zonas. Quédate con el presupuesto más alto en números.`,
+      system: `Eres un extractor JSON. Analiza el texto. Deduce municipios de España si nombran zonas (ej: Zagaleta = Benahavis, Sotogrande = San Roque). Quédate con el presupuesto más alto en números puros.`,
       messages: historialChat
     });
 
@@ -44,42 +53,40 @@ async function hablarConHarvis(mensajeCliente: string) {
 
     if (intencion.requiereBuscarPropiedades && intencion.parametrosSupabase) {
       const p = intencion.parametrosSupabase;
-      console.log(`    [⚙️ SISTEMA] Buscando en DB: ${p.municipiosDeducidos.join(',')} hasta ${p.presupuestoMaximoEuros}€`);
+      console.log(`    [⚙️ SISTEMA] Buscando DB: ${p.municipiosDeducidos?.join(',')} hasta ${p.presupuestoMaximoEuros}€`);
       contextoSupabase = await searchPropertiesInSupabase({
-        urbanizacion: p.urbanizaciones.join(','),
-        municipioDeducido: p.municipiosDeducidos.join(','),
+        urbanizacion: p.urbanizaciones?.join(','),
+        municipioDeducido: p.municipiosDeducidos?.join(','),
         precioMax: p.presupuestoMaximoEuros
       });
     }
 
     if (intencion.requiereCrearCarpetaDrive && intencion.parametrosDrive) {
       const d = intencion.parametrosDrive;
-      console.log(`    [⚙️ SISTEMA] Creando carpeta para: ${d.nombreCliente}`);
+      console.log(`    [⚙️ SISTEMA] Creando carpeta Drive para: ${d.nombreCliente}`);
       contextoDrive = await createClientFolder(d.nombreCliente, d.tipoInteraccion);
     }
 
     const promptDeVenta = `
-    Eres Harvis, un broker inmobiliario de superlujo. 
-    Aquí tienes el resultado de la base de datos tras la petición del cliente:
-    
-    [DATOS DE BASE DE DATOS]: ${JSON.stringify(contextoSupabase)}
-    [DATOS DE DRIVE]: ${JSON.stringify(contextoDrive)}
+    Eres Harvis, broker inmobiliario de superlujo. 
+    Resultado de la base de datos: ${JSON.stringify(contextoSupabase)}
+    Resultado Drive: ${JSON.stringify(contextoDrive)}
 
-    REGLAS DE RESPUESTA:
-    1. Si 'tipo_coincidencia' es 'exacto', véndele la propiedad con entusiasmo.
-    2. Si 'tipo_coincidencia' es 'precio_aproximado' o 'zona_aproximada', dile con elegancia que le ofreces alternativas similares muy exclusivas.
-    3. Si se creó carpeta de Drive, infórmale de que el NDA/Documentación está lista.
-    Sé conciso, persuasivo y elegante. NO inventes propiedades.
+    REGLAS:
+    1. Si 'tipo_coincidencia' es 'exacto', véndelo con entusiasmo y cita la referencia.
+    2. Si es 'precio_aproximado' o 'zona_aproximada', dile que le ofreces alternativas similares exclusivas.
+    3. Si se creó carpeta de Drive, infórmale de que la documentación está lista.
+    Responde SIEMPRE de forma concisa y elegante en el idioma del usuario.
     `;
 
     const { text: respuestaFinal } = await generateText({
-      model: google('gemini-2.5-flash'),
+      model: modeloNvidia,
       temperature: 0.7,
       system: promptDeVenta,
       messages: historialChat
     });
 
-    console.log(`\n🤖 AGENTE HARVIS:`);
+    console.log(`\n🤖 AGENTE HARVIS (Llama 3.1 8B):`);
     console.log(`─────────────────────────────────────────────────────────────────────────`);
     console.log(respuestaFinal);
     console.log(`─────────────────────────────────────────────────────────────────────────\n`);
@@ -87,7 +94,7 @@ async function hablarConHarvis(mensajeCliente: string) {
     historialChat.push({ role: 'assistant', content: respuestaFinal });
 
   } catch (error: any) {
-    console.error('❌ Error durante la simulación:', error.message || error);
+    console.error('❌ Error durante la simulación con NVIDIA:', error.message || error);
   }
 }
 
