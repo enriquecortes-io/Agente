@@ -126,7 +126,7 @@ async function testAgenteDirecto(mensaje = 'Hola, soy Carlos García, busco una 
       body: JSON.stringify({
         model: 'nvidia/llama-3.3-nemotron-super-49b-v1',
         messages, tools, tool_choice: 'auto',
-        max_tokens: 1024, temperature: 0.7,
+        max_tokens: 1500, temperature: 0.4,
       }),
     });
 
