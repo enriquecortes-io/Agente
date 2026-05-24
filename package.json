@@ -4,7 +4,10 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
   },
   "repository": {
     "type": "git",
@@ -31,6 +34,9 @@
     "ai": "^4.0.3",
     "dotenv": "^17.4.2",
     "googleapis": "^171.4.0",
+    "next": "^16.2.6",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
     "resend": "^6.12.3",
     "zod": "^3.23.8",
     "zod-to-json-schema": "^3.23.3"
