@@ -24,10 +24,10 @@
     "typescript": "^6.0.3"
   },
   "dependencies": {
-    "@ai-sdk/google": "^0.0.52",
-    "@ai-sdk/openai": "^0.0.66",
+    "@ai-sdk/google": "^0.0.36",
+    "@ai-sdk/openai": "^0.0.36",
     "@supabase/supabase-js": "^2.106.0",
-    "ai": "^4.3.16",
+    "ai": "^3.4.33",
     "dotenv": "^17.4.2",
     "googleapis": "^171.4.0",
     "zod": "^3.23.8"
