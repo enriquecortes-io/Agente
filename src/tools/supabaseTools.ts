@@ -10,55 +10,46 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 export async function searchPropertiesInSupabase(args: { zona?: string; precioMax?: number }) {
   try {
     if (!supabaseUrl || !supabaseKey) {
-      return { success: false, error: 'Faltan credenciales de Supabase (SUPABASE_URL y SUPABASE_ANON_KEY) en .env.local' };
+      return { success: false, error: 'Faltan credenciales de Supabase en .env.local' };
     }
 
-    // Empezamos a construir la consulta a tu tabla 'properties'
     let query = supabase
       .from('properties')
-      .select('id, referencia, titulo, precio, ubicacion, zona, habitaciones, banos, m2_construidos')
-      .eq('activa', true) // Solo buscamos propiedades que estén activas
+      .select('id, referencia, titulo, precio, ubicacion, zona, habitaciones, banos')
+      .eq('activa', true)
       .limit(5);
 
-    // Si Harvis detecta una zona, buscamos tanto en la columna 'ubicacion' como en 'zona'
+    // CEREBRO GEOGRÁFICO: Expansión de zonas
     if (args.zona) {
-      query = query.or(`ubicacion.ilike.%${args.zona}%,zona.ilike.%${args.zona}%`);
+      const zonaBuscada = args.zona.toLowerCase();
+      
+      // Si busca Zagaleta, abrimos el abanico a Benahavis en la columna 'zona' o 'ubicacion'
+      if (zonaBuscada.includes('zagaleta')) {
+        query = query.or(`ubicacion.ilike.%zagaleta%,zona.ilike.%zagaleta%,ubicacion.ilike.%benahavis%,zona.ilike.%benahavis%`);
+      } else {
+        query = query.or(`ubicacion.ilike.%${args.zona}%,zona.ilike.%${args.zona}%`);
+      }
     }
 
-    // Si Harvis detecta un presupuesto máximo, filtramos por precio
     if (args.precioMax) {
       query = query.lte('precio', args.precioMax);
     }
 
     const { data, error } = await query;
 
-    if (error) {
-      console.error("Error consultando Supabase:", error);
-      return { success: false, error: error.message };
-    }
+    if (error) return { success: false, error: error.message };
 
-    // Formateamos los datos para que Gemini los mastique fácilmente 
-    // (Como tu título es JSONB, extraemos el texto para que la IA no se líe)
     const propiedadesFormateadas = data.map(p => ({
-      id: p.id,
       referencia: p.referencia || 'N/A',
-      // Intentamos sacar el título, si es un objeto JSON sacamos la propiedad 'es' o 'en'
-      titulo: typeof p.titulo === 'object' && p.titulo !== null ? (p.titulo.es || p.titulo.en || JSON.stringify(p.titulo)) : p.titulo,
+      titulo: typeof p.titulo === 'object' && p.titulo !== null ? (p.titulo.es || p.titulo.en) : p.titulo,
       precio: p.precio,
-      ubicacion: p.ubicacion || p.zona,
-      habitaciones: p.habitaciones,
-      banos: p.banos,
-      m2_construidos: p.m2_construidos
+      ubicacion: p.ubicacion,
+      zona: p.zona
     }));
 
-    return { 
-      success: true, 
-      cantidad_encontrada: propiedadesFormateadas.length, 
-      propiedades: propiedadesFormateadas 
-    };
+    return { success: true, cantidad: propiedadesFormateadas.length, propiedades: propiedadesFormateadas };
     
   } catch (error: any) {
-    console.error('Error al conectar con Supabase:', error);
     return { success: false, error: error.message };
   }
 }
