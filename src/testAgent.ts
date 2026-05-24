@@ -200,6 +200,7 @@ async function main() {
     else if (arg === 'drive')           { await testDrive(); }
     else if (arg === 'webhook')         { await testWebhooks(); }
     else if (arg === 'chat')            { await testChat(chatMsg); }
+    else if (arg === 'agente')            { await testAgenteDirecto(chatMsg); }
     else if (arg === 'auth')            { await testAuth(); }
     else {
       await testSupabase();
@@ -219,3 +220,74 @@ async function main() {
 }
 
 main();
+
+async function testAgenteDirecto(mensaje = 'Hola, busco una villa en Marbella') {
+  header('Agente Directo — sin servidor');
+
+  const { google } = await import('@ai-sdk/google');
+  const { generateText } = await import('ai');
+  const { SYSTEM_PROMPT } = await import('./agents/realEstateExecutive.js');
+  const { searchPropertiesInSupabase } = await import('./tools/supabaseTools.js');
+  const { prepararEntornoCliente, actualizarHistorial } = await import('./tools/driveLogger.js');
+  const { sendCrmLeadNotification } = await import('./tools/webhookTools.js');
+  const { z } = await import('zod');
+
+  console.log(`\n💬 Usuario: "${mensaje}"\n`);
+
+  const result = await generateText({
+    model: google('gemini-2.5-flash'),
+    system: SYSTEM_PROMPT,
+    messages: [{ role: 'user', content: mensaje }],
+    maxSteps: 5,
+    tools: {
+      buscarPropiedades: {
+        description: 'Busca propiedades en Supabase por zona y precio.',
+        parameters: z.object({
+          zona: z.string().optional(),
+          precioMax: z.number().optional(),
+        }),
+        execute: async ({ zona, precioMax }) => {
+          return await searchPropertiesInSupabase({ urbanizacion: zona, municipioDeducido: zona, precioMax });
+        },
+      },
+      registrarCliente: {
+        description: 'Registra al cliente en el historial de Drive.',
+        parameters: z.object({
+          nombreCliente: z.string(),
+          tipoLead: z.enum(['Venta', 'Captacion', 'Gestion']),
+        }),
+        execute: async ({ nombreCliente, tipoLead }) => {
+          return await prepararEntornoCliente(nombreCliente, tipoLead);
+        },
+      },
+      guardarConversacion: {
+        description: 'Guarda el turno en el historial.',
+        parameters: z.object({
+          docId: z.string(),
+          mensajeUsuario: z.string(),
+          respuestaAgente: z.string(),
+        }),
+        execute: async ({ docId, mensajeUsuario, respuestaAgente }) => {
+          await actualizarHistorial(docId, mensajeUsuario, respuestaAgente);
+          return { success: true };
+        },
+      },
+      notificarLeadCRM: {
+        description: 'Registra el lead en Supabase.',
+        parameters: z.object({
+          nombre: z.string(),
+          contacto: z.string(),
+          presupuesto: z.number().optional(),
+          notasCualificacion: z.string(),
+          tipoLead: z.enum(['Venta', 'Captacion', 'Gestion']).optional(),
+        }),
+        execute: async (lead) => {
+          return await sendCrmLeadNotification(lead);
+        },
+      },
+    },
+  });
+
+  console.log(`\n🤖 Harvis: ${result.text}`);
+  log('Agente directo', { success: true, steps: result.steps?.length ?? 0 });
+}
