@@ -140,7 +140,7 @@ async function testAgenteDirecto(mensaje = 'Hola, soy Carlos García, busco una 
       method: 'POST',
       headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'nvidia/llama-3.3-nemotron-super-49b-v1',
+        model: 'meta/llama-3.3-70b-instruct',
         messages, tools, tool_choice: 'auto',
         max_tokens: 1500, temperature: 0.4,
       }),
