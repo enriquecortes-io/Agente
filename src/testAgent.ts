@@ -1,5 +1,6 @@
 import { searchPropertiesInSupabase } from './tools/supabaseTools.js';
 import { createClientFolder } from './tools/googleDriveTools.js';
+import { syncLogToDrive } from './tools/chatLogger.js';
 import dotenv from 'dotenv';
 
 dotenv.config({ path: '.env.local' });
@@ -7,16 +8,16 @@ dotenv.config({ path: '.env.local' });
 const NVIDIA_API_KEY = process.env.NVIDIA_API_KEY || '';
 const MODELO = 'meta/llama-3.1-8b-instruct';
 
-type Mensaje = { role: string; content: string };
+// 🔥 Añadimos 'fecha' a la interfaz del mensaje
+type Mensaje = { role: string; content: string; fecha?: string };
 let historialChat: Mensaje[] = [];
-
-// 🗂️ EL TRUCO: Mantenemos la carpeta activa en memoria global durante la sesión
 let carpetaActivaDrive: any = null;
 
 async function llamarNvidiaPuro(systemPrompt: string, mensajesUsuario: Mensaje[], temperatura: number) {
   const mensajes = [
     { role: 'system', content: systemPrompt },
-    ...mensajesUsuario
+    // Mapeamos para quitar la fecha antes de enviarlo a la IA, ya que la API no lo acepta
+    ...mensajesUsuario.map(m => ({ role: m.role, content: m.content }))
   ];
 
   const respuesta = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
@@ -42,15 +43,19 @@ async function llamarNvidiaPuro(systemPrompt: string, mensajesUsuario: Mensaje[]
   return datos.choices[0].message.content;
 }
 
+function obtenerFechaHora() {
+  return new Date().toLocaleString('es-ES', { timeZone: 'Europe/Madrid' });
+}
+
 async function hablarConHarvis(mensajeCliente: string) {
   console.log(`\n╔═════════════════════════════════════════════════════════════════════════`);
   console.log(`║ 👤 CLIENTE: "${mensajeCliente}"`);
   console.log(`╚═════════════════════════════════════════════════════════════════════════`);
 
-  historialChat.push({ role: 'user', content: mensajeCliente });
+  // Guardamos el mensaje del usuario con la fecha y hora exacta
+  historialChat.push({ role: 'user', content: mensajeCliente, fecha: obtenerFechaHora() });
 
   try {
-    // --- FASE 1: PENSAR ---
     const promptExtractor = `
     Eres un analizador de datos. Tu ÚNICA salida debe ser un objeto JSON válido, sin texto adicional.
     Reglas: Deduce municipios de España (Zagaleta=Benahavis). Quédate con el presupuesto más alto en números puros.
@@ -94,14 +99,12 @@ async function hablarConHarvis(mensajeCliente: string) {
       });
     }
 
-    // Solo creamos la carpeta si no existe ya una activa para este cliente
     if (intencion.requiereCrearCarpetaDrive && intencion.parametrosDrive && !carpetaActivaDrive) {
       const d = intencion.parametrosDrive;
       console.log(`    [⚙️ SISTEMA] Creando nueva carpeta Drive para: ${d.nombreCliente}`);
       carpetaActivaDrive = await createClientFolder(d.nombreCliente, d.tipoInteraccion);
     }
 
-    // --- FASE 3: RESPONDER ---
     const promptDeVenta = `
     Eres Harvis, broker inmobiliario de superlujo. 
     Resultado de la DB: ${JSON.stringify(contextoSupabase)}
@@ -121,20 +124,18 @@ async function hablarConHarvis(mensajeCliente: string) {
     console.log(respuestaFinal);
     console.log(`─────────────────────────────────────────────────────────────────────────\n`);
 
-    historialChat.push({ role: 'assistant', content: respuestaFinal });
+    // Guardamos la respuesta de Harvis con la fecha y hora exacta
+    historialChat.push({ role: 'assistant', content: respuestaFinal, fecha: obtenerFechaHora() });
 
-    // --- FASE 4: GUARDAR/ACTUALIZAR LOG EN DRIVE ---
-    if (carpetaActivaDrive) {
-      console.log(`    [⚙️ SISTEMA] 📝 Sincronizando 'Log_Conversacion.txt' en la carpeta del cliente en Drive...`);
+    // 🔥 EL MOMENTO DE LA VERDAD: Guardado real en Drive
+    if (carpetaActivaDrive && carpetaActivaDrive.id) {
+      console.log(`    [⚙️ SISTEMA] Sincronizando log en Google Drive...`);
       
-      // Formateamos todo el array del chat en un texto legible
       const transcripcionLegible = historialChat.map(m => 
-        `[${m.role === 'user' ? '👤 CLIENTE' : '🤖 HARVIS'}]: ${m.content}`
-      ).join('\n\n');
+        `[${m.fecha}] ${m.role === 'user' ? '👤 CLIENTE' : '🤖 HARVIS'}:\n${m.content}`
+      ).join('\n\n---------------------------------------------------\n\n');
       
-      // 💡 NOTA DE ARQUITECTURA: 
-      // Aquí en el futuro llamarás a una nueva función de tu 'googleDriveTools.js'
-      // Ej: await updateLogFileInDrive(carpetaActivaDrive.id, transcripcionLegible);
+      await syncLogToDrive(carpetaActivaDrive.id, transcripcionLegible);
     }
 
   } catch (error: any) {
@@ -149,7 +150,6 @@ async function iniciarSimulador() {
   await delay(3000);
   await hablarConHarvis("Great! I am Charles Vance. Please prepare the NDA so we can move forward.");
   await delay(3000);
-  // Añadimos una tercera frase para probar que el log se actualiza sin recrear la carpeta
   await hablarConHarvis("Could you add a clause in the NDA for my associates?");
 }
 
