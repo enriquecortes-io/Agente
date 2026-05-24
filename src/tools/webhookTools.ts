@@ -36,6 +36,14 @@ export async function sendCrmLeadNotification(lead: LeadData) {
 
     if (lead.tipoLead === 'Captacion') {
       // → captacion_leads
+      // Verificar si ya existe el lead por email o teléfono
+      const contactoKey = esEmail ? 'email' : 'phone';
+      const contactoVal = esEmail ? lead.contacto : lead.contacto;
+      const { data: existing } = await supabase.from('captacion_leads').select('id').eq(contactoKey, contactoVal).limit(1);
+      if (existing && existing.length > 0) {
+        console.log(`[CRM] Lead captación de ${lead.nombre} ya existe — ignorando duplicado`);
+        return { success: true, message: 'Lead ya existente.' };
+      }
       const { error } = await supabase.from('captacion_leads').insert({
         name: lead.nombre,
         email: esEmail ? lead.contacto : null,
@@ -55,6 +63,12 @@ export async function sendCrmLeadNotification(lead: LeadData) {
         ? `[GESTIÓN] ${lead.notasCualificacion}`
         : lead.notasCualificacion;
 
+      const contactoKey = esEmail ? 'email' : 'phone';
+      const { data: existing } = await supabase.from('leads').select('id').eq(contactoKey, lead.contacto).limit(1);
+      if (existing && existing.length > 0) {
+        console.log(`[CRM] Lead de ${lead.nombre} ya existe — ignorando duplicado`);
+        return { success: true, message: 'Lead ya existente.' };
+      }
       const { error } = await supabase.from('leads').insert({
         name: lead.nombre,
         email: esEmail ? lead.contacto : null,
