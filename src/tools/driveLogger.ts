@@ -1,16 +1,14 @@
 import { google } from 'googleapis';
 import dotenv from 'dotenv';
 
-// Nos aseguramos de que el logger también lea el .env.local
 dotenv.config({ path: '.env.local' });
 
+const ROOT_FOLDER_ID = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID;
+
 const getDriveService = () => {
-  // Extraemos las credenciales directamente de las variables de entorno
-  // Asegúrate de que los nombres de estas variables coincidan con las tuyas en el .env.local
   const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
-  
-  // Limpiamos la clave privada por si viene con las comillas literales o saltos de línea escapados (\\n)
   let privateKey = process.env.GOOGLE_PRIVATE_KEY;
+  
   if (privateKey) {
     privateKey = privateKey.replace(/\\n/g, '\n');
   }
@@ -19,7 +17,6 @@ const getDriveService = () => {
      throw new Error("Faltan GOOGLE_CLIENT_EMAIL o GOOGLE_PRIVATE_KEY en tu .env.local");
   }
 
-  // Inyectamos las credenciales manualmente (sin archivo JSON)
   const auth = new google.auth.GoogleAuth({
     credentials: {
       client_email: clientEmail,
@@ -32,12 +29,18 @@ const getDriveService = () => {
 };
 
 export async function getOrCreateClientFolder(nombreCliente: string) {
+  if (!ROOT_FOLDER_ID) {
+    console.error("    [❌ ERROR DRIVE] Falta GOOGLE_DRIVE_ROOT_FOLDER_ID en el .env.local");
+    return null;
+  }
+
   const drive = getDriveService();
   const folderName = `Cliente - ${nombreCliente}`;
   
   try {
+    // Buscamos la carpeta del cliente DENTRO de la carpeta principal compartida
     const res = await drive.files.list({
-      q: `mimeType='application/vnd.google-apps.folder' and name='${folderName}' and trashed=false`,
+      q: `'${ROOT_FOLDER_ID}' in parents and mimeType='application/vnd.google-apps.folder' and name='${folderName}' and trashed=false`,
       fields: 'files(id, webViewLink)'
     });
     
@@ -46,10 +49,12 @@ export async function getOrCreateClientFolder(nombreCliente: string) {
       return res.data.files[0];
     }
     
+    // Si no existe, la creamos DENTRO de la carpeta principal
     const folder = await drive.files.create({
       requestBody: {
         name: folderName,
-        mimeType: 'application/vnd.google-apps.folder'
+        mimeType: 'application/vnd.google-apps.folder',
+        parents: [ROOT_FOLDER_ID] // 🔥 EL TRUCO: Le decimos que la guarde en tu Drive
       },
       fields: 'id, webViewLink'
     });
