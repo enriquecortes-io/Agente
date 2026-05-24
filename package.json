@@ -26,8 +26,9 @@
   "dependencies": {
     "@ai-sdk/google": "^0.0.52",
     "@ai-sdk/openai": "^0.0.52",
+    "@google/generative-ai": "^0.24.1",
     "@supabase/supabase-js": "^2.106.1",
-    "ai": "^4.3.16",
+    "ai": "^4.0.3",
     "dotenv": "^17.4.2",
     "googleapis": "^171.4.0",
     "zod": "^3.23.8",
