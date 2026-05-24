@@ -1,34 +1,18 @@
-import { generateObject, generateText, CoreMessage } from 'ai';
+import { generateText, CoreMessage } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
-import { z } from 'zod';
 import { searchPropertiesInSupabase } from './tools/supabaseTools.js';
 import { createClientFolder } from './tools/googleDriveTools.js';
 import dotenv from 'dotenv';
 
 dotenv.config({ path: '.env.local' });
 
-// 🧠 CONEXIÓN A NVIDIA NIM
+// 🧠 CONEXIÓN A NVIDIA NIM Pura
 const nvidia = createOpenAI({
   baseURL: 'https://integrate.api.nvidia.com/v1',
   apiKey: process.env.NVIDIA_API_KEY || '',
 });
 
-// Usamos tu Llama 3.1 8B de NVIDIA
 const modeloNvidia = nvidia('meta/llama-3.1-8b-instruct');
-
-const EsquemaExtractor = z.object({
-  requiereBuscarPropiedades: z.boolean(),
-  parametrosSupabase: z.object({
-    urbanizaciones: z.array(z.string()),
-    municipiosDeducidos: z.array(z.string()),
-    presupuestoMaximoEuros: z.number()
-  }).optional(),
-  requiereCrearCarpetaDrive: z.boolean(),
-  parametrosDrive: z.object({
-    nombreCliente: z.string(),
-    tipoInteraccion: z.string()
-  }).optional()
-});
 
 let historialChat: CoreMessage[] = [];
 
@@ -40,15 +24,44 @@ async function hablarConHarvis(mensajeCliente: string) {
   historialChat.push({ role: 'user', content: mensajeCliente });
 
   try {
-    // --- FASE 1: PENSAR (NVIDIA NIM MODO JSON COMPATIBLE) ---
-    const { object: intencion } = await generateObject({
+    // --- FASE 1: PENSAR (generateText puro + JSON.parse manual para evitar el 404) ---
+    const promptExtractor = `
+    Eres un analizador de datos. Tu ÚNICA salida debe ser un objeto JSON válido, sin texto adicional, sin formato markdown, SOLO el JSON.
+    Reglas: Deduce municipios de España (Zagaleta=Benahavis, Sotogrande=San Roque). Quédate con el presupuesto más alto en números puros.
+    
+    Estructura OBLIGATORIA del JSON:
+    {
+      "requiereBuscarPropiedades": boolean,
+      "parametrosSupabase": {
+        "urbanizaciones": ["string"],
+        "municipiosDeducidos": ["string"],
+        "presupuestoMaximoEuros": number
+      },
+      "requiereCrearCarpetaDrive": boolean,
+      "parametrosDrive": {
+        "nombreCliente": "string",
+        "tipoInteraccion": "string"
+      }
+    }
+    `;
+
+    const { text: respuestaCruda } = await generateText({
       model: modeloNvidia,
-      mode: 'json', // 🔥 LA LÍNEA MÁGICA: Obliga a usar JSON clásico y evita el error 404
       temperature: 0,
-      schema: EsquemaExtractor,
-      system: `Eres un extractor de datos. Analiza el texto y devuelve un objeto JSON válido con la estructura solicitada. Deduce municipios de España si nombran zonas (ej: Zagaleta = Benahavis, Sotogrande = San Roque). Quédate con el presupuesto más alto en números puros.`,
+      system: promptExtractor,
       messages: historialChat
     });
+
+    // 🔪 Limpiamos por si la IA mete ```json al principio
+    const jsonLimpio = respuestaCruda.replace(/```json/g, '').replace(/```/g, '').trim();
+    let intencion;
+    
+    try {
+      intencion = JSON.parse(jsonLimpio);
+    } catch (parseError) {
+      console.error("❌ La IA no devolvió un JSON válido:", jsonLimpio);
+      return;
+    }
 
     let contextoSupabase = null;
     let contextoDrive = null;
@@ -69,6 +82,7 @@ async function hablarConHarvis(mensajeCliente: string) {
       contextoDrive = await createClientFolder(d.nombreCliente, d.tipoInteraccion);
     }
 
+    // --- FASE 3: RESPONDER ---
     const promptDeVenta = `
     Eres Harvis, broker inmobiliario de superlujo. 
     Resultado de la base de datos: ${JSON.stringify(contextoSupabase)}
@@ -81,7 +95,6 @@ async function hablarConHarvis(mensajeCliente: string) {
     Responde SIEMPRE de forma concisa y elegante en el idioma del usuario.
     `;
 
-    // --- FASE 3: RESPONDER (NVIDIA NIM) ---
     const { text: respuestaFinal } = await generateText({
       model: modeloNvidia,
       temperature: 0.7,
@@ -89,7 +102,7 @@ async function hablarConHarvis(mensajeCliente: string) {
       messages: historialChat
     });
 
-    console.log(`\n🤖 AGENTE HARVIS (NVIDIA Llama 3.1 8B):`);
+    console.log(`\n🤖 AGENTE HARVIS (NVIDIA Manual Bypass):`);
     console.log(`─────────────────────────────────────────────────────────────────────────`);
     console.log(respuestaFinal);
     console.log(`─────────────────────────────────────────────────────────────────────────\n`);
@@ -97,7 +110,7 @@ async function hablarConHarvis(mensajeCliente: string) {
     historialChat.push({ role: 'assistant', content: respuestaFinal });
 
   } catch (error: any) {
-    console.error('❌ Error durante la simulación con NVIDIA:', error.message || error);
+    console.error('❌ Error Salvaje:', error.message || error);
   }
 }
 
