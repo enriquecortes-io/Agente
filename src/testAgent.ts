@@ -1,7 +1,6 @@
 import { generateText, tool, CoreMessage } from 'ai';
 import { google } from '@ai-sdk/google';
 import { z } from 'zod';
-import { SYSTEM_PROMPT } from './agents/realEstateExecutive.js';
 import { searchPropertiesInSupabase } from './tools/supabaseTools.js';
 import dotenv from 'dotenv';
 
@@ -9,18 +8,16 @@ dotenv.config({ path: '.env.local' });
 
 const tools = {
   buscarPropiedades: tool({
-    description: 'Obligatorio para buscar propiedades. Extrae zonas y presupuestos.',
-    // 🧠 EL HACK: Todo es TEXTO (String). Cero arrays, cero números. Así la IA no falla nunca.
+    description: 'Busca propiedades en el sistema. REGLA: Tienes que rellenar los 3 parámetros obligatoriamente.',
     parameters: z.object({
-      zonas_texto: z.string().describe('Urbanizaciones separadas por coma (ej: "Sotogrande, La Zagaleta")'),
-      municipios_texto: z.string().describe('Municipios deducidos separados por coma (ej: "San Roque, Benahavis")'),
-      presupuesto_texto: z.string().describe('Presupuesto en números como texto (ej: "7000000")')
+      zonas: z.string().describe('Las urbanizaciones exactas que pide el cliente (ej: "Sotogrande, La Zagaleta")'),
+      municipios: z.string().describe('Los municipios españoles a los que pertenecen esas zonas (ej: "San Roque, Benahavis")'),
+      presupuesto: z.string().describe('El presupuesto máximo del cliente en formato numérico (ej: "7000000")')
     }),
     execute: async (args) => {
-      // 1. Calculamos el precio
       let precioCalculado = 0;
-      if (args.presupuesto_texto) {
-        const strLimpio = args.presupuesto_texto.toLowerCase().replace(/euros|€/g, '').trim();
+      if (args.presupuesto) {
+        const strLimpio = args.presupuesto.toLowerCase().replace(/euros|€/g, '').trim();
         if (strLimpio.includes('m') || strLimpio.includes('millon')) {
           const numero = parseFloat(strLimpio.replace(/[^\d.,]/g, '').replace(',', '.'));
           if (!isNaN(numero)) precioCalculado = numero * 1000000;
@@ -30,14 +27,14 @@ const tools = {
         }
       }
 
-      console.log(`\n    🔌 [TOOL SUPABASE] ¡Harvis ha procesado los datos a la perfección!`);
-      console.log(`    📍 Zonas extraídas:    ${args.zonas_texto}`);
-      console.log(`    🗺️ Municipios (IA):    ${args.municipios_texto}`);
+      console.log(`\n    🔌 [TOOL SUPABASE] ¡POR FIN HARVIS TRABAJA!`);
+      console.log(`    📍 Zonas extraídas:    ${args.zonas}`);
+      console.log(`    🗺️ Municipios (IA):    ${args.municipios}`);
       console.log(`    💰 Presupuesto Max:    ${precioCalculado}€`);
 
       return await searchPropertiesInSupabase({ 
-        urbanizacion: args.zonas_texto, 
-        municipioDeducido: args.municipios_texto, 
+        urbanizacion: args.zonas, 
+        municipioDeducido: args.municipios, 
         precioMax: precioCalculado 
       });
     }
@@ -45,6 +42,13 @@ const tools = {
 };
 
 let historialChat: CoreMessage[] = [];
+
+// 🛑 ELIMINAMOS EL PROMPT ANTIGUO Y USAMOS UNO 100% TÉCNICO
+const PROMPT_PURO = `
+Eres un procesador de datos JSON. Tu ÚNICO trabajo es leer el mensaje del cliente, entender qué zonas pide, deducir en qué municipios de España están, y transformar su presupuesto a un número.
+DEBES LLAMAR A LA HERRAMIENTA 'buscarPropiedades' CON TODOS LOS PARÁMETROS RELLENOS.
+Nunca envíes un objeto vacío.
+`;
 
 async function hablarConHarvis(mensajeCliente: string) {
   console.log(`\n╔═════════════════════════════════════════════════════════════════════════`);
@@ -56,17 +60,17 @@ async function hablarConHarvis(mensajeCliente: string) {
   try {
     const response = await generateText({
       model: google('gemini-2.5-flash'),
-      temperature: 0, // Literalmente cero creatividad.
-      system: SYSTEM_PROMPT + "\n\nREGLA: Usa las herramientas. Extrae la info como texto plano.",
+      temperature: 0, // 0 absoluto
+      system: PROMPT_PURO,
       messages: historialChat,
       tools: tools,
-      toolChoice: 'required',
+      toolChoice: 'required', // Obligatorio sí o sí
       maxSteps: 5
     });
 
     console.log(`\n🤖 AGENTE HARVIS:`);
     console.log(`─────────────────────────────────────────────────────────────────────────`);
-    console.log(response.text || "(Búsqueda ejecutada en segundo plano)");
+    console.log(response.text || "(Herramienta ejecutada)");
     console.log(`─────────────────────────────────────────────────────────────────────────\n`);
 
   } catch (error: any) {
