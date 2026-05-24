@@ -16,7 +16,7 @@ function isAuthorized(req: Request): boolean {
 function detectarContacto(mensaje: string) {
   const emailMatch = mensaje.match(/[\w.-]+@[\w.-]+\.[a-z]{2,}/i);
   const phoneMatch = mensaje.match(/\+?[\d\s\-]{9,}/);
-  const nombreMatch = mensaje.match(/(?:soy|me llamo)\s+([\w\s]{3,30}?)(?:,|\.|quiero|busco|mi\s)/i);
+  const nombreMatch = mensaje.match(/(?:soy|me llamo)\s+([A-ZÁÉÍÓÚÑa-záéíóúñ][a-záéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑa-záéíóúñ][a-záéíóúñ]+){0,2})/i);
   const presupuestoMatch = mensaje.match(/(\d+(?:[.,]\d+)?)\s*(?:millones?|M€|M\s*eur)/i);
   return {
     email: emailMatch?.[0] || null,
