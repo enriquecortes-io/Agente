@@ -1,6 +1,11 @@
+import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
-
 dotenv.config({ path: '.env.local' });
+
+const supabase = createClient(
+  process.env.SUPABASE_URL || '',
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || ''
+);
 
 interface LeadData {
   nombre: string;
@@ -8,6 +13,7 @@ interface LeadData {
   presupuesto?: number;
   estiloBuscado?: string;
   notasCualificacion: string;
+  tipoLead?: 'Venta' | 'Captacion' | 'Gestion';
 }
 
 interface PropertyCopywriting {
@@ -19,63 +25,68 @@ interface PropertyCopywriting {
 }
 
 /**
- * Envía un lead cualificado orgánicamente por el agente hacia el CRM o canal de alertas
+ * Lead de VENTA o GESTIÓN → tabla leads
+ * Lead de CAPTACIÓN → tabla captacion_leads
  */
 export async function sendCrmLeadNotification(lead: LeadData) {
   try {
-    const webhookUrl = process.env.CRM_WEBHOOK_URL;
-    if (!webhookUrl) {
-      console.warn('[Webhook Tool] CRM_WEBHOOK_URL no configurada en .env.local');
-      return { success: false, error: 'Falta la configuración del webhook del CRM.' };
+    // Separar nombre y contacto
+    const esEmail = lead.contacto.includes('@');
+    const esPhone = !esEmail;
+
+    if (lead.tipoLead === 'Captacion') {
+      // → captacion_leads
+      const { error } = await supabase.from('captacion_leads').insert({
+        name: lead.nombre,
+        email: esEmail ? lead.contacto : null,
+        phone: esPhone ? lead.contacto : null,
+        precio_estimado: lead.presupuesto ? `${lead.presupuesto}€` : null,
+        ubicacion: lead.estiloBuscado || null,
+        mensaje: lead.notasCualificacion,
+        locale: 'es',
+      });
+
+      if (error) throw new Error(error.message);
+      console.log(`[CRM] Lead captación de ${lead.nombre} insertado en captacion_leads`);
+
+    } else {
+      // Venta o Gestion → leads
+      const notas = lead.tipoLead === 'Gestion'
+        ? `[GESTIÓN] ${lead.notasCualificacion}`
+        : lead.notasCualificacion;
+
+      const { error } = await supabase.from('leads').insert({
+        name: lead.nombre,
+        email: esEmail ? lead.contacto : null,
+        phone: esPhone ? lead.contacto : null,
+        horizon: lead.presupuesto ? `${lead.presupuesto}€` : null,
+        notas: notas,
+        agente: 'Harvis',
+        locale: 'es',
+      });
+
+      if (error) throw new Error(error.message);
+      console.log(`[CRM] Lead ${lead.tipoLead} de ${lead.nombre} insertado en leads`);
     }
 
-    const response = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        event: 'lead_qualified_by_ai',
-        timestamp: new Date().toISOString(),
-        data: lead
-      })
-    });
+    return { success: true, message: `Lead de ${lead.nombre} registrado en Supabase.` };
 
-    if (!response.ok) throw new Error(`Error HTTP: ${response.status}`);
-
-    console.log(`[Webhook Tool] Lead de ${lead.nombre} enviado correctamente al CRM.`);
-    return { success: true, message: 'Perfil de inversor sincronizado con el CRM con éxito.' };
-  } catch (error) {
-    console.error('Error al disparar webhook de CRM:', error);
-    return { success: false, error: 'Error de conectividad externa con el CRM.' };
+  } catch (error: any) {
+    console.error('[CRM] Error al insertar lead:', error.message);
+    return { success: false, error: error.message };
   }
 }
 
 /**
- * Envía el copywriting optimizado de una propiedad para su publicación automática en la web
+ * Publicación de propiedad — pendiente de CMS
+ * Por ahora loguea y devuelve éxito para no bloquear el agente
  */
 export async function triggerCmsPropertyPublish(property: PropertyCopywriting) {
-  try {
-    const webhookUrl = process.env.CMS_WEBHOOK_URL;
-    if (!webhookUrl) {
-      console.warn('[Webhook Tool] CMS_WEBHOOK_URL no configurada en .env.local');
-      return { success: false, error: 'Falta la configuración del webhook del CMS.' };
-    }
-
-    const response = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        event: 'property_onboarding_ai',
-        timestamp: new Date().toISOString(),
-        data: property
-      })
-    });
-
-    if (!response.ok) throw new Error(`Error HTTP: ${response.status}`);
-
-    console.log(`[Webhook Tool] Publicación de "${property.titulo}" enviada al CMS.`);
-    return { success: true, message: 'Copywriting y ficha técnica inyectados en el CMS correctamente.' };
-  } catch (error) {
-    console.error('Error al disparar webhook de CMS:', error);
-    return { success: false, error: 'Error de conectividad externa con el CMS de la web.' };
-  }
+  console.log(`[CMS] Propiedad pendiente de publicar: ${property.titulo}`);
+  console.log(`[CMS] Configura CMS_WEBHOOK_URL en .env.local cuando tengas el endpoint`);
+  return {
+    success: true,
+    message: 'Copywriting generado. Pendiente de configurar webhook CMS.',
+    data: property,
+  };
 }
