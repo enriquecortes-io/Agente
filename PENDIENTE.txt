@@ -112,3 +112,20 @@
   2. Arreglar message vacío en respuesta del endpoint
   3. Verificar dominio theeditmarbella.com en Resend
 ═══════════════════════════════════════════════════════════════════
+
+─── SESIÓN 25/05/2026 ────────────────────────────────────────────
+
+[✅] Notificación email a Enrique — operativo end-to-end
+     - Detección automática nombre + email + presupuesto del mensaje
+     - Inserción en Supabase + llamada directa a /api/notify
+     - Resend desde onboarding@resend.dev
+     - Pendiente: verificar dominio theeditmarbella.com en Resend
+
+[✅] Message vacío arreglado — respuesta construida con propiedades reales
+[✅] Endpoint en producción: harvis-six.vercel.app
+
+─── TOP 3 PRÓXIMA SESIÓN ─────────────────────────────────────────
+
+1. Conectar chat widget en The Edit Marbella
+2. Verificar dominio theeditmarbella.com en Resend
+3. Mejorar respuesta cuando no hay propiedades exactas
