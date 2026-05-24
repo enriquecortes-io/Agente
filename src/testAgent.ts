@@ -13,7 +13,7 @@ const nvidia = createOpenAI({
   apiKey: process.env.NVIDIA_API_KEY || '',
 });
 
-// 🔥 EL CEREBRO ELEGIDO (El ID exacto que no da 404)
+// Usamos tu Llama 3.1 8B de NVIDIA
 const modeloNvidia = nvidia('meta/llama-3.1-8b-instruct');
 
 const EsquemaExtractor = z.object({
@@ -40,11 +40,13 @@ async function hablarConHarvis(mensajeCliente: string) {
   historialChat.push({ role: 'user', content: mensajeCliente });
 
   try {
+    // --- FASE 1: PENSAR (NVIDIA NIM MODO JSON COMPATIBLE) ---
     const { object: intencion } = await generateObject({
       model: modeloNvidia,
+      mode: 'json', // 🔥 LA LÍNEA MÁGICA: Obliga a usar JSON clásico y evita el error 404
       temperature: 0,
       schema: EsquemaExtractor,
-      system: `Eres un extractor JSON. Analiza el texto. Deduce municipios de España si nombran zonas (ej: Zagaleta = Benahavis, Sotogrande = San Roque). Quédate con el presupuesto más alto en números puros.`,
+      system: `Eres un extractor de datos. Analiza el texto y devuelve un objeto JSON válido con la estructura solicitada. Deduce municipios de España si nombran zonas (ej: Zagaleta = Benahavis, Sotogrande = San Roque). Quédate con el presupuesto más alto en números puros.`,
       messages: historialChat
     });
 
@@ -79,6 +81,7 @@ async function hablarConHarvis(mensajeCliente: string) {
     Responde SIEMPRE de forma concisa y elegante en el idioma del usuario.
     `;
 
+    // --- FASE 3: RESPONDER (NVIDIA NIM) ---
     const { text: respuestaFinal } = await generateText({
       model: modeloNvidia,
       temperature: 0.7,
@@ -86,7 +89,7 @@ async function hablarConHarvis(mensajeCliente: string) {
       messages: historialChat
     });
 
-    console.log(`\n🤖 AGENTE HARVIS (Llama 3.1 8B):`);
+    console.log(`\n🤖 AGENTE HARVIS (NVIDIA Llama 3.1 8B):`);
     console.log(`─────────────────────────────────────────────────────────────────────────`);
     console.log(respuestaFinal);
     console.log(`─────────────────────────────────────────────────────────────────────────\n`);
