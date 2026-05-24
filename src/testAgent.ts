@@ -1,10 +1,16 @@
-import { generateText, CoreMessage } from 'ai';
+import { generateText } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
 import { searchPropertiesInSupabase } from './tools/supabaseTools.js';
 import { createClientFolder } from './tools/googleDriveTools.js';
 import dotenv from 'dotenv';
 
 dotenv.config({ path: '.env.local' });
+
+// 🔥 EL HACK: Definimos nosotros el tipo para que TypeScript se calle la boca
+type CoreMessage = {
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+};
 
 // 🧠 CONEXIÓN A NVIDIA NIM Pura
 const nvidia = createOpenAI({
@@ -24,7 +30,7 @@ async function hablarConHarvis(mensajeCliente: string) {
   historialChat.push({ role: 'user', content: mensajeCliente });
 
   try {
-    // --- FASE 1: PENSAR (generateText puro + JSON.parse manual para evitar el 404) ---
+    // --- FASE 1: PENSAR ---
     const promptExtractor = `
     Eres un analizador de datos. Tu ÚNICA salida debe ser un objeto JSON válido, sin texto adicional, sin formato markdown, SOLO el JSON.
     Reglas: Deduce municipios de España (Zagaleta=Benahavis, Sotogrande=San Roque). Quédate con el presupuesto más alto en números puros.
@@ -52,7 +58,6 @@ async function hablarConHarvis(mensajeCliente: string) {
       messages: historialChat
     });
 
-    // 🔪 Limpiamos por si la IA mete ```json al principio
     const jsonLimpio = respuestaCruda.replace(/```json/g, '').replace(/```/g, '').trim();
     let intencion;
     
