@@ -86,6 +86,8 @@ async function ejecutarTool(nombre: string, args: any, clienteNombre?: string): 
       });
 
     case 'notificarLeadCRM':
+      if (crmNotificado) { console.log('  [⚠️ SKIP] notificarLeadCRM ya ejecutado'); return { success: true }; }
+      crmNotificado = true;
       return await sendCrmLeadNotification(args);
 
     default:
@@ -134,6 +136,8 @@ async function testAgenteDirecto(mensaje = 'Hola, soy Carlos García, busco una 
 
   let docId: string | null = null;
   let ultimoTextoHarvis = '';
+  let crmNotificado = false;
+  let guardarCount = 0;
 
   for (let i = 0; i < 10; i++) {
     const response = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
