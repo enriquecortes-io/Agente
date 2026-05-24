@@ -2,144 +2,135 @@ import { google } from 'googleapis';
 import dotenv from 'dotenv';
 dotenv.config({ path: '.env.local' });
 
-function getDriveService() {
-  if (!process.env.GOOGLE_CLIENT_EMAIL || !process.env.GOOGLE_PRIVATE_KEY) {
-    throw new Error('[Drive] Faltan GOOGLE_CLIENT_EMAIL o GOOGLE_PRIVATE_KEY en .env.local');
-  }
-  const auth = new google.auth.GoogleAuth({
-    credentials: {
-      client_email: process.env.GOOGLE_CLIENT_EMAIL,
-      private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
-    },
-    scopes: ['https://www.googleapis.com/auth/drive'],
-  });
-  return google.drive({ version: 'v3', auth });
+function getServices() {
+ if (!process.env.GOOGLE_CLIENT_EMAIL || !process.env.GOOGLE_PRIVATE_KEY) {
+   throw new Error('[Drive] Faltan GOOGLE_CLIENT_EMAIL o GOOGLE_PRIVATE_KEY en .env.local');
+ }
+ const auth = new google.auth.GoogleAuth({
+   credentials: {
+     client_email: process.env.GOOGLE_CLIENT_EMAIL,
+     private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+   },
+   scopes: [
+     'https://www.googleapis.com/auth/drive',
+     'https://www.googleapis.com/auth/documents',
+   ],
+ });
+ const drive = google.drive({ version: 'v3', auth });
+ const docs  = google.docs({ version: 'v1', auth });
+ return { drive, docs };
 }
 
 export type TipoLead = 'Venta' | 'Captacion' | 'Gestion';
 
+/**
+* En lugar de crear archivos nuevos (bloqueado por Google para bots),
+* Harvis escribe en un único Google Doc maestro creado manualmente por el usuario.
+* Cada cliente tiene su sección dentro del doc, identificada por nombre y tipo de lead.
+* Devuelve el docId maestro para usarlo en actualizarHistorial.
+*/
 export async function prepararEntornoCliente(nombreCliente: string, tipoLead: TipoLead) {
-  const drive = getDriveService();
-  const folderName = `[${tipoLead}] ${nombreCliente}`;
-  const parentId = process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID;
+ const { docs } = getServices();
 
-  // 1. Buscar carpeta existente
-  let folderId: string | undefined;
-  const q = parentId
-    ? `name='${folderName}' and mimeType='application/vnd.google-apps.folder' and '${parentId}' in parents and trashed=false`
-    : `name='${folderName}' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
+ const docId = process.env.GOOGLE_MASTER_DOC_ID;
+ if (!docId) throw new Error('Falta GOOGLE_MASTER_DOC_ID en .env.local');
 
-  const folderRes = await drive.files.list({ q, fields: 'files(id, name)' });
-  if (folderRes.data.files && folderRes.data.files.length > 0) {
-    folderId = folderRes.data.files[0].id!;
-    console.log(`[Drive] Carpeta existente: ${folderRes.data.files[0].name}`);
-  }
+ const timestamp = new Date().toLocaleString('es-ES', {
+   timeZone: 'Europe/Madrid',
+   day: '2-digit', month: '2-digit', year: 'numeric',
+   hour: '2-digit', minute: '2-digit', second: '2-digit',
+ });
 
-  // 2. Crear carpeta si no existe
-  if (!folderId) {
-    const folderMeta: any = { name: folderName, mimeType: 'application/vnd.google-apps.folder' };
-    if (parentId) folderMeta.parents = [parentId];
-    const folder = await drive.files.create({ requestBody: folderMeta, fields: 'id' });
-    folderId = folder.data.id!;
-    console.log(`[Drive] Carpeta creada: ${folderName} → id: ${folderId}`);
-  }
+ // Insertar cabecera de nuevo cliente al inicio del doc
+ const cabecera =
+   `\n${'═'.repeat(50)}\n` +
+   `🏠 CLIENTE: ${nombreCliente.toUpperCase()}\n` +
+   `📋 TIPO: ${tipoLead}\n` +
+   `📅 INICIO: ${timestamp}\n` +
+   `${'═'.repeat(50)}\n`;
 
-  // 3. Buscar historial existente
-  console.log(`[Drive] Buscando historial en carpeta: ${folderId}`);
-  const docRes = await drive.files.list({
-    q: `'${folderId}' in parents and name='Historial_Conversacion.txt' and trashed=false`,
-    fields: 'files(id)',
-  });
-  let docId = docRes.data.files?.[0]?.id;
-  console.log(`[Drive] Historial existente: ${docId ?? 'ninguno'}`);
+ await docs.documents.batchUpdate({
+   documentId: docId,
+   requestBody: {
+     requests: [
+       {
+         insertText: {
+           location: { index: 1 },
+           text: cabecera,
+         },
+       },
+     ],
+   },
+ });
 
-  // 4. Crear archivo txt si no existe
-  if (!docId) {
-    console.log(`[Drive] Intentando crear Historial_Conversacion.txt en carpeta ${folderId}...`);
-    const contenidoInicial =
-      `HISTORIAL DE CONVERSACIÓN\n` +
-      `Cliente: ${nombreCliente}\n` +
-      `Tipo: ${tipoLead}\n` +
-      `Creado: ${new Date().toLocaleString('es-ES', { timeZone: 'Europe/Madrid' })}\n` +
-      `${'─'.repeat(50)}\n`;
+ console.log(`[Docs] Cabecera de ${nombreCliente} (${tipoLead}) insertada en doc maestro`);
 
-    const file = await drive.files.create({
-      requestBody: {
-        name: 'Historial_Conversacion.txt',
-        parents: [folderId],
-      },
-      media: {
-        mimeType: 'text/plain',
-        body: contenidoInicial,
-      },
-      fields: 'id',
-    });
-    docId = file.data.id!;
-    console.log(`[Drive] Historial_Conversacion.txt creado → id: ${docId}`);
-  }
-
-  return { folderId, docId };
+ // folderId no aplica — devolvemos el docId maestro en ambos campos
+ return { folderId: docId, docId };
 }
 
+/**
+* Añade un turno de conversación al doc maestro con timestamp.
+*/
 export async function actualizarHistorial(docId: string, mensajeUsuario: string, respuestaAgente: string) {
-  const drive = getDriveService();
+ const { docs } = getServices();
 
-  let contenidoActual = '';
-  try {
-    const res = await drive.files.get({ fileId: docId, alt: 'media' } as any);
-    contenidoActual = res.data as string;
-  } catch {
-    contenidoActual = '';
-  }
+ const timestamp = new Date().toLocaleString('es-ES', {
+   timeZone: 'Europe/Madrid',
+   day: '2-digit', month: '2-digit', year: 'numeric',
+   hour: '2-digit', minute: '2-digit', second: '2-digit',
+ });
 
-  const timestamp = new Date().toLocaleString('es-ES', {
-    timeZone: 'Europe/Madrid',
-    day: '2-digit', month: '2-digit', year: 'numeric',
-    hour: '2-digit', minute: '2-digit', second: '2-digit',
-  });
+ const nuevoBloque =
+   `\n${'─'.repeat(40)}\n` +
+   `📅 ${timestamp}\n` +
+   `👤 Cliente: ${mensajeUsuario}\n` +
+   `🤖 Harvis: ${respuestaAgente}\n`;
 
-  const nuevoBloque =
-    `\n${'─'.repeat(50)}\n` +
-    `📅 ${timestamp}\n` +
-    `👤 Cliente: ${mensajeUsuario}\n` +
-    `🤖 Harvis: ${respuestaAgente}\n`;
+ await docs.documents.batchUpdate({
+   documentId: docId,
+   requestBody: {
+     requests: [
+       {
+         insertText: {
+           location: { index: 1 },
+           text: nuevoBloque,
+         },
+       },
+     ],
+   },
+ });
 
-  await drive.files.update({
-    fileId: docId,
-    uploadType: 'media',
-    media: { mimeType: 'text/plain', body: contenidoActual + nuevoBloque },
-  });
-
-  console.log(`[Drive] Historial actualizado — ${timestamp}`);
+ console.log(`[Docs] Historial actualizado — ${timestamp}`);
 }
 
 export async function syncLogToDrive(folderId: string, content: string) {
-  const drive = getDriveService();
-  const res = await drive.files.list({
-    q: `'${folderId}' in parents and name='Log_Conversacion.txt' and trashed=false`,
-    fields: 'files(id)',
-  });
-  const existingFile = res.data.files?.[0] ?? null;
-  const media = { mimeType: 'text/plain', body: content };
-  if (existingFile?.id) {
-    await drive.files.update({ fileId: existingFile.id, media });
-  } else {
-    await drive.files.create({
-      requestBody: { name: 'Log_Conversacion.txt', parents: [folderId] },
-      media,
-    });
-  }
+ const { drive } = getServices();
+ const res = await drive.files.list({
+   q: `'${folderId}' in parents and name='Log_Conversacion.txt' and trashed=false`,
+   fields: 'files(id)',
+ });
+ const existingFile = res.data.files?.[0] ?? null;
+ const media = { mimeType: 'text/plain', body: content };
+ if (existingFile?.id) {
+   await drive.files.update({ fileId: existingFile.id, media });
+ } else {
+   await drive.files.create({
+     requestBody: { name: 'Log_Conversacion.txt', parents: [folderId] },
+     media,
+   });
+ }
 }
 
 export async function borrarCarpetasAntiguas() {
-  const drive = getDriveService();
-  const res = await drive.files.list({
-    q: "name contains 'Cliente' and mimeType='application/vnd.google-apps.folder' and trashed=false",
-    fields: 'files(id, name)',
-  });
-  const carpetas = res.data.files || [];
-  for (const file of carpetas) {
-    await drive.files.delete({ fileId: file.id! });
-    console.log(`[Drive] Borrada: ${file.name}`);
-  }
+ const { drive } = getServices();
+ const res = await drive.files.list({
+   q: "name contains 'Cliente' and mimeType='application/vnd.google-apps.folder' and trashed=false",
+   fields: 'files(id, name)',
+ });
+ const carpetas = res.data.files || [];
+ for (const file of carpetas) {
+   await drive.files.delete({ fileId: file.id! });
+   console.log(`[Drive] Borrada: ${file.name}`);
+ }
 }
