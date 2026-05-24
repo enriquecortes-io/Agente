@@ -2,12 +2,11 @@ import dotenv from 'dotenv';
 dotenv.config({ path: '.env.local' });
 
 import { searchPropertiesInSupabase } from './tools/supabaseTools.js';
-import { prepararEntornoCliente, actualizarHistorial, syncLogToDrive, borrarCarpetasAntiguas } from './tools/driveLogger.js';
+import { prepararEntornoCliente, actualizarHistorial, borrarCarpetasAntiguas } from './tools/driveLogger.js';
 import { sendCrmLeadNotification, triggerCmsPropertyPublish } from './tools/webhookTools.js';
 
 const OK   = '✅';
 const FAIL = '❌';
-const WARN = '⚠️ ';
 const SEP  = '─'.repeat(60);
 
 function log(label: string, result: unknown) {
@@ -50,11 +49,6 @@ async function testWebhooks() {
     notasCualificacion: 'Muy cualificado. Timeline: 3 meses.',
     tipoLead: 'Venta',
   }));
-  log('triggerCmsPropertyPublish', await triggerCmsPropertyPublish({
-    titulo: 'Villa Silencio', ubicacion: 'La Zagaleta', precio: 8_900_000,
-    copywritingEmocional: 'Donde el silencio es el verdadero lujo.',
-    tagsLifestyle: ['privacidad', 'off-market'],
-  }));
 }
 
 async function cleanupDrive() {
@@ -73,7 +67,6 @@ async function testAgenteDirecto(mensaje = 'Hola, soy Carlos García, busco una 
   const { google } = await import('@ai-sdk/google');
   const { streamText } = await import('ai');
   const { SYSTEM_PROMPT } = await import('./agents/realEstateExecutive.js');
-  const { z } = await import('zod');
 
   console.log(`\n💬 Usuario: "${mensaje}"\n`);
 
@@ -85,50 +78,65 @@ async function testAgenteDirecto(mensaje = 'Hola, soy Carlos García, busco una 
     tools: {
       registrarCliente: {
         description: 'Registra al cliente en Drive. Llama esto en cuanto tengas el nombre y el tipo de gestión.',
-        parameters: z.object({
-          nombreCliente: z.string().describe('Nombre completo del cliente.'),
-          tipoLead: z.enum(['Venta', 'Captacion', 'Gestion']).describe('Tipo de gestión.'),
-        }),
-        execute: async ({ nombreCliente, tipoLead }) => {
+        parameters: {
+          type: 'object' as const,
+          properties: {
+            nombreCliente: { type: 'string', description: 'Nombre completo del cliente.' },
+            tipoLead: { type: 'string', enum: ['Venta', 'Captacion', 'Gestion'], description: 'Tipo de gestión.' },
+          },
+          required: ['nombreCliente', 'tipoLead'],
+        },
+        execute: async ({ nombreCliente, tipoLead }: { nombreCliente: string, tipoLead: 'Venta' | 'Captacion' | 'Gestion' }) => {
           console.log(`  [Tool] registrarCliente → ${nombreCliente} (${tipoLead})`);
           const r = await prepararEntornoCliente(nombreCliente, tipoLead);
           return { ...r, ok: true };
         },
       },
       guardarConversacion: {
-        description: 'Guarda el turno de conversación en el historial del cliente.',
-        parameters: z.object({
-          docId: z.string(),
-          mensajeUsuario: z.string(),
-          respuestaAgente: z.string(),
-        }),
-        execute: async ({ docId, mensajeUsuario, respuestaAgente }) => {
+        description: 'Guarda el turno de conversación en el historial.',
+        parameters: {
+          type: 'object' as const,
+          properties: {
+            docId: { type: 'string', description: 'ID del documento de historial.' },
+            mensajeUsuario: { type: 'string', description: 'Mensaje del cliente.' },
+            respuestaAgente: { type: 'string', description: 'Resumen de la respuesta de Harvis.' },
+          },
+          required: ['docId', 'mensajeUsuario', 'respuestaAgente'],
+        },
+        execute: async ({ docId, mensajeUsuario, respuestaAgente }: { docId: string, mensajeUsuario: string, respuestaAgente: string }) => {
           console.log(`  [Tool] guardarConversacion → docId: ${docId}`);
           await actualizarHistorial(docId, mensajeUsuario, respuestaAgente);
           return { success: true };
         },
       },
       buscarPropiedades: {
-        description: 'Busca propiedades en Supabase.',
-        parameters: z.object({
-          zona: z.string().optional(),
-          precioMax: z.number().optional(),
-        }),
-        execute: async ({ zona, precioMax }) => {
+        description: 'Busca propiedades en Supabase por zona y precio.',
+        parameters: {
+          type: 'object' as const,
+          properties: {
+            zona: { type: 'string', description: 'Zona en Marbella.' },
+            precioMax: { type: 'number', description: 'Presupuesto máximo en euros.' },
+          },
+        },
+        execute: async ({ zona, precioMax }: { zona?: string, precioMax?: number }) => {
           console.log(`  [Tool] buscarPropiedades → ${zona}, ${precioMax}`);
           return await searchPropertiesInSupabase({ urbanizacion: zona, municipioDeducido: zona, precioMax });
         },
       },
       notificarLeadCRM: {
         description: 'Registra el lead en Supabase CRM.',
-        parameters: z.object({
-          nombre: z.string(),
-          contacto: z.string(),
-          presupuesto: z.number().optional(),
-          notasCualificacion: z.string(),
-          tipoLead: z.enum(['Venta', 'Captacion', 'Gestion']).optional(),
-        }),
-        execute: async (lead) => {
+        parameters: {
+          type: 'object' as const,
+          properties: {
+            nombre: { type: 'string' },
+            contacto: { type: 'string' },
+            presupuesto: { type: 'number' },
+            notasCualificacion: { type: 'string' },
+            tipoLead: { type: 'string', enum: ['Venta', 'Captacion', 'Gestion'] },
+          },
+          required: ['nombre', 'contacto', 'notasCualificacion'],
+        },
+        execute: async (lead: any) => {
           console.log(`  [Tool] notificarLeadCRM → ${lead.nombre}`);
           return await sendCrmLeadNotification(lead);
         },
@@ -136,7 +144,6 @@ async function testAgenteDirecto(mensaje = 'Hola, soy Carlos García, busco una 
     },
   });
 
-  // Leer el stream completo
   let textoCompleto = '';
   for await (const chunk of result.textStream) {
     process.stdout.write(chunk);
