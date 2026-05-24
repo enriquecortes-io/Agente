@@ -1,9 +1,18 @@
 import { google } from 'googleapis';
+// Intentamos importar la configuración o el cliente si ya lo tienes creado en tus herramientas
+// para mantener el proyecto limpio y DRY (Don't Repeat Yourself)
 
 const getDriveService = () => {
-  // Le forzamos a buscar las credenciales como debe hacerlo tu otro archivo
+  // Si usas una variable de entorno, el SDK de Google la detecta automáticamente si está bien configurada
+  // Si no encuentra el archivo físico, delegamos en las credenciales por defecto del entorno
+  const config: any = {};
+  
+  if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+    config.keyFile = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+  }
+  
   const auth = new google.auth.GoogleAuth({
-    keyFile: process.env.GOOGLE_APPLICATION_CREDENTIALS || './credentials.json',
+    ...config,
     scopes: ['https://www.googleapis.com/auth/drive']
   });
   return google.drive({ version: 'v3', auth });
@@ -60,13 +69,13 @@ export async function appendToLogFile(folderId: string, newText: string) {
 
     if (fileId) {
       await drive.files.update({ fileId, media });
-      console.log(`    [📝 LOG] Historial añadido correctamente. (Update)`);
+      console.log(`    [📝 LOG] Historial añadido correctamente en el Luck de texto. (Update)`);
     } else {
       await drive.files.create({
         requestBody: { name: 'Log_Conversacion.txt', parents: [folderId] },
         media
       });
-      console.log(`    [📝 LOG] Archivo de historial creado por primera vez. (Create)`);
+      console.log(`    [📝 LOG] Archivo de historial creado por primera vez en la carpeta. (Create)`);
     }
   } catch (err: any) {
     console.error("    [❌ ERROR LOG] Fallo guardando el archivo de texto:", err.message);
