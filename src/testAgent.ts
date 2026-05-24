@@ -10,11 +10,10 @@ dotenv.config({ path: '.env.local' });
 
 const tools = {
   buscarPropiedades: tool({
-    description: 'Busca propiedades. Usa esta herramienta para encontrar villas en la base de datos.',
-    // AL QUITAR EL .optional(), GOOGLE GEMINI SABE QUE ES ESTRICTAMENTE OBLIGATORIO
+    description: 'OBLIGATORIO: Usa esto para buscar casas en la base de datos.',
     parameters: z.object({
-      zona: z.string().describe('Ubicación exacta extraída del mensaje (ej: La Zagaleta)'),
-      precioMax: z.number().describe('Presupuesto máximo en euros extraído del mensaje (ej: 7000000)')
+      zona: z.string().describe('El nombre de la ciudad o zona (Ejemplo: "La Zagaleta" o "Sierra Blanca")'),
+      precioMax: z.number().describe('Presupuesto máximo en número (Ejemplo: 7000000)')
     }),
     execute: async (args) => {
       console.log(`\n    🔌 [TOOL SUPABASE] ¡Harvis busca! -> Zona: ${args.zona}, Precio: ${args.precioMax}€`);
@@ -22,10 +21,10 @@ const tools = {
     }
   }),
   crearCarpetaCliente: tool({
-    description: 'Crea una carpeta segura en Drive. Úsala para NDA o Proof of Funds.',
+    description: 'OBLIGATORIO: Usa esto para crear carpetas en Google Drive cuando el cliente da su nombre.',
     parameters: z.object({
-      nombreCliente: z.string().describe('Nombre completo del cliente extraído del mensaje (ej: Charles Vance)'),
-      tipoInteraccion: z.string().describe('Tipo de documento (ej: NDA y Proof of Funds)')
+      nombreCliente: z.string().describe('El nombre y apellido del cliente (Ejemplo: "Charles Vance")'),
+      tipoInteraccion: z.string().describe('El motivo de la carpeta (Ejemplo: "NDA" o "Prueba de Fondos")')
     }),
     execute: async (args) => {
       console.log(`\n    🔌 [TOOL DRIVE] ¡Harvis organiza! -> Cliente: ${args.nombreCliente} | Interacción: ${args.tipoInteraccion}`);
@@ -38,6 +37,18 @@ const tools = {
 
 let historialChat: CoreMessage[] = [];
 
+// Aquí le hacemos el lavado de cerebro a Harvis
+const INSTRUCCIONES_ESTRICTAS = `
+ERES UN AGENTE EJECUTOR. ESTÁS OBLIGADO A USAR LAS HERRAMIENTAS.
+REGLAS INQUEBRANTABLES:
+1. Si el cliente busca propiedades, MENCIONA zonas (como Zagaleta) o presupuesto, DEBES usar la herramienta "buscarPropiedades". 
+   - No digas que no puedes buscar. Tienes la herramienta, ¡ÚSALA!
+   - Extrae la zona como texto y el precioMax como número.
+2. Si el cliente te da su nombre (ej. "Charles Vance") y pide un NDA, DEBES usar "crearCarpetaCliente".
+   - Extrae exactamente el nombre del texto.
+NUNCA envíes valores vacíos o undefined. Lee atentamente el mensaje del cliente y extrae los datos.
+`;
+
 async function hablarConHarvis(mensajeCliente: string) {
   console.log(`\n╔═════════════════════════════════════════════════════════════════════════`);
   console.log(`║ 👤 CLIENTE: "${mensajeCliente}"`);
@@ -48,8 +59,8 @@ async function hablarConHarvis(mensajeCliente: string) {
   try {
     const response = await generateText({
       model: google('gemini-2.5-flash'),
-      temperature: 0.1, // MAGIA PURA: Le quitamos la creatividad para que sea un extractor perfecto
-      system: SYSTEM_PROMPT + "\n\nINSTRUCCIÓN CRÍTICA: Eres una máquina de extracción de datos. Cuando llames a una herramienta, es OBLIGATORIO extraer los parámetros exactos del mensaje del usuario y rellenarlos.",
+      temperature: 0, // 0 absoluto: Cero creatividad, 100% obediencia
+      system: SYSTEM_PROMPT + "\n\n" + INSTRUCCIONES_ESTRICTAS,
       messages: historialChat,
       tools: tools,
       maxSteps: 5
@@ -57,7 +68,7 @@ async function hablarConHarvis(mensajeCliente: string) {
 
     console.log(`\n🤖 AGENTE HARVIS:`);
     console.log(`─────────────────────────────────────────────────────────────────────────`);
-    console.log(response.text || "(Acción ejecutada en segundo plano)");
+    console.log(response.text || "(Herramienta ejecutada silenciosamente)");
     console.log(`─────────────────────────────────────────────────────────────────────────\n`);
 
     if (response.messages) historialChat = response.messages;
@@ -72,7 +83,7 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 async function iniciarSimulador() {
   await hablarConHarvis("Hi there! I'm an investor looking for a modern, very private villa in La Zagaleta or Sierra Blanca. Budget is around 6M to 7M euros. What do you have?");
-  await delay(5000); // Pausa corta para evitar saturar tu API key
+  await delay(5000);
   await hablarConHarvis("Perfect, that property looks stunning. Please prepare the non-disclosure agreement (NDA) so I can review the off-market pictures. My name is Charles Vance and my WhatsApp is +44 7123 456789. Send me the link to upload my proof of funds too.");
 }
 
