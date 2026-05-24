@@ -45,7 +45,7 @@ async function hablarConHarvis(mensajeCliente: string) {
   try {
     // --- FASE 1: PENSAR ---
     const promptExtractor = `
-    Eres un analizador de datos. Salida: ÚNICO objeto JSON válido.
+    Eres un analizador de datos. Salida: ÚNICO objeto JSON válido. NO digas nada más, NO uses markdown.
     Reglas: Deduce municipios de España (Zagaleta=Benahavis).
     Estructura OBLIGATORIA:
     {
@@ -57,12 +57,17 @@ async function hablarConHarvis(mensajeCliente: string) {
     `;
 
     const respuestaCruda = await llamarNvidiaPuro(promptExtractor, historialChat, 0);
-    const jsonLimpio = respuestaCruda.replace(/```json/g, '').replace(/```/g, '').trim();
-    let intencion;
     
+    let intencion;
     try {
+      // Magia negra: extraemos SOLO lo que esté entre la primera llave { y la última }
+      const match = respuestaCruda.match(/\{[\s\S]*\}/);
+      const jsonLimpio = match ? match[0] : respuestaCruda;
       intencion = JSON.parse(jsonLimpio);
-    } catch (e) { return; }
+    } catch (e: any) {
+      console.error(`    [❌ ERROR JSON] El modelo no devolvió JSON puro. Respuesta del modelo:\n`, respuestaCruda);
+      return; // Salimos, pero ahora SÍ sabemos por qué ha fallado
+    }
 
     let contextoSupabase = null;
 
@@ -76,12 +81,11 @@ async function hablarConHarvis(mensajeCliente: string) {
       });
     }
 
-    // 🔥 Buscamos o creamos la carpeta única del cliente
     if (intencion.requiereCrearCarpetaDrive && intencion.parametrosDrive) {
       const nombreC = intencion.parametrosDrive.nombreCliente;
       if (!carpetaActivaDrive || carpetaActivaDrive.nombre !== nombreC) {
         carpetaActivaDrive = await getOrCreateClientFolder(nombreC);
-        if(carpetaActivaDrive) carpetaActivaDrive.nombre = nombreC; // Guardamos el nombre en memoria
+        if(carpetaActivaDrive) carpetaActivaDrive.nombre = nombreC;
       }
     }
 
@@ -108,7 +112,6 @@ async function hablarConHarvis(mensajeCliente: string) {
     // --- FASE 4: GUARDAR EN EL LOG HISTÓRICO ---
     if (carpetaActivaDrive && carpetaActivaDrive.id) {
       const timeStamp = obtenerFechaHora();
-      // Formato claro para el bloque de texto
       const logEntry = `[${timeStamp}]\n👤 CLIENTE: ${mensajeCliente}\n🤖 HARVIS: ${respuestaFinal}\n---------------------------------------------------------`;
       
       await appendToLogFile(carpetaActivaDrive.id, logEntry);
