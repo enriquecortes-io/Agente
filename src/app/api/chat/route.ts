@@ -126,8 +126,20 @@ export async function POST(req: Request) {
      }
    }
 
-   // Llamada a NVIDIA
-   const res = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
+   // Respuesta rapida para captacion sin email — evita timeout
+  if (esCaptacion) {
+    const nombreCap = contacto.nombre || '';
+    const respuestaCap = nombreCap
+      ? 'Encantado, ' + nombreCap + '. En The Edit Marbella nos especializamos en la venta de propiedades de lujo en la Costa del Sol. Trabajamos con compradores precualificados, valoracion por datos de mercado reales y produccion editorial cinematografica. Podria contarme mas sobre su propiedad? En que zona se encuentra y que precio estimado tiene en mente?'
+      : 'Encantado. Con quien tengo el placer de hablar?';
+    return new Response(
+      JSON.stringify({ success: true, message: respuestaCap, docId: null, requestId }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
+
+ // Llamada a NVIDIA
+  const res = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
      method: 'POST',
      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
      body: JSON.stringify({
