@@ -16,12 +16,21 @@ function detectarContacto(mensaje: string) {
   const emailMatch = mensaje.match(/[\w.-]+@[\w.-]+\.[a-z]{2,}/i);
   const phoneMatch = mensaje.match(/\+?[\d\s\-]{9,}/);
   const nombreMatch = mensaje.match(/(?:soy|me llamo)\s+([A-ZÁÉÍÓÚÑa-záéíóúñ][a-záéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑa-záéíóúñ][a-záéíóúñ]+){0,2})/i);
-  const presupuestoMatch = mensaje.match(/(\d+(?:[.,]\d+)?)\s*(?:millones?|M€|M\s*eur)/i);
+  const presupuestoMatch = 
+    mensaje.match(/(\d+(?:[.,]\d+)?)\s*(?:millones?|M€|M\s*eur)/i) ||
+    mensaje.match(/(\d{1,3}(?:[.,]\d{3})*)\s*(?:euros?|€)/i) ||
+    mensaje.match(/(\d+)\s*(?:mil\s*euros?|k€)/i);
   return {
     email: emailMatch?.[0] || null,
     phone: phoneMatch?.[0]?.trim() || null,
     nombre: nombreMatch?.[1]?.trim() || null,
-    presupuesto: presupuestoMatch ? parseFloat(presupuestoMatch[1].replace(',', '.')) * 1_000_000 : null,
+    presupuesto: presupuestoMatch ? (() => {
+    const raw = presupuestoMatch[1].replace(/\./g, '').replace(',', '.');
+    const num = parseFloat(raw);
+    if (presupuestoMatch[0].match(/millon/i)) return num * 1_000_000;
+    if (presupuestoMatch[0].match(/mil\s*euro|k€/i)) return num * 1_000;
+    return num; // ya en euros
+  })() : null,
   };
 }
 
