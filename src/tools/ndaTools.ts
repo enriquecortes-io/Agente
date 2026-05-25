@@ -24,7 +24,6 @@ export async function generarYEnviarNDA(datos: NDAData) {
 
     const browser = await puppeteer.default.launch({
       args: chromium.default.args,
-      defaultViewport: chromium.default.defaultViewport,
       executablePath: await chromium.default.executablePath(),
       headless: true,
     });
