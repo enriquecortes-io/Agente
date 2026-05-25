@@ -6,138 +6,103 @@
 
 ─── COMPLETADO ───────────────────────────────────────────────────
 
-[✅] Memoria persistente entre sesiones (Supabase)
-[✅] Clasificación Venta/Captacion/Gestion
-[✅] Deduplicación de leads en Supabase
-[✅] Deduplicación de carpetas en Drive
-[✅] URLs de The Edit Marbella en resultados
-[✅] Notificación a Enrique via Resend
-     - Webhook Supabase → /api/notify → Resend
-     - from: onboarding@resend.dev
-     - Pendiente: verificar dominio theeditmarbella.com en Resend
 [✅] Modelo: meta/llama-3.3-70b-instruct (NVIDIA NIM)
 [✅] Endpoint /api/chat en producción (harvis-six.vercel.app)
+[✅] Memoria persistente entre sesiones (Supabase)
+[✅] Clasificación Venta/Captacion/Gestion
+[✅] Cualificación profunda: timeline, urgencia, motivación, perfil
+[✅] Búsqueda de propiedades con URLs de The Edit Marbella
+[✅] Deduplicación de leads en Supabase
+[✅] Deduplicación de carpetas en Drive
+[✅] Notificación a Enrique via Resend (onboarding@resend.dev)
+[✅] Google Calendar — visita agendada + email .ics al cliente
+[✅] Respuesta construida con propiedades cuando hay zona/presupuesto
 
 
 ─── PRIORIDAD ALTA ───────────────────────────────────────────────
 
-[1] CONEXIÓN A THE EDIT MARBELLA
+[1] AÑADIR agendarVisita AL ENDPOINT DE PRODUCCIÓN
+   - Está en testAgent pero no en route.ts
+   - Harvis debe poder agendar visitas desde la web
+
+[2] CONEXIÓN A THE EDIT MARBELLA
    - Chat widget en mdlm-xi.vercel.app
    - POST a /api/chat con x-agent-key
-   - Mantener historial en localStorage del navegador
-
-[2] ARREGLAR MESSAGE VACÍO EN RESPUESTA
-   - El endpoint devuelve message: "" cuando NVIDIA hace tool calls
-   - Necesita construir respuesta con los resultados de las tools
+   - Historial en localStorage del navegador
 
 [3] VERIFICAR DOMINIO EN RESEND
-   - Añadir theeditmarbella.com en resend.com/domains
-   - Emails desde harvis@theeditmarbella.com en lugar de onboarding@resend.dev
+   - theeditmarbella.com en resend.com/domains
+   - Emails desde harvis@theeditmarbella.com
 
 
 ─── PRIORIDAD MEDIA ──────────────────────────────────────────────
 
 [4] CANALES ADICIONALES
-   - WhatsApp Business API (Twilio o Meta)
-   - Email entrante (parser de Gmail / Resend)
+   - WhatsApp Business API (Meta — en proceso de aprobación)
+   - Email entrante (Resend Inbound)
    - Transcripción de llamadas (Whisper API)
 
-[5] CUALIFICACIÓN PROFUNDA
-   - Detectar timeline (¿cuándo quiere comprar?)
-   - Detectar urgencia y motivación de compra
-   - Identificar perfil: inversor / segunda residencia / reubicación
-   - Detectar nacionalidad y necesidades fiscales (NIE, golden visa)
-
-[6] ACCIONES DE CIERRE
-   - Agendar visitas en Google Calendar
-   - Enviar emails de seguimiento automatizados
+[5] ACCIONES DE CIERRE
+   - Emails de seguimiento automatizados (24h sin respuesta)
    - Generar NDAs personalizados en PDF
    - Presentación de propiedad personalizada por cliente
 
-[7] INTELIGENCIA COMERCIAL
-   - Priorizar leads por valor potencial (presupuesto × probabilidad)
-   - Detectar señales de pérdida de interés (silencio > X días)
-   - Cross-selling: mostrar villa de mayor precio si encaja el perfil
+[6] INTELIGENCIA COMERCIAL
+   - Priorizar leads por valor potencial
+   - Detectar pérdida de interés (silencio > X días)
+   - Cross-selling: villa de mayor precio si encaja el perfil
+   - Matching: nuevas propiedades → leads compatibles
 
-[8] DATOS DEL CLIENTE
-   - Captura y validación KYC: pasaporte, NIE, certificado de fondos
-   - Validar formato de email y teléfono internacional
+[7] DATOS DEL CLIENTE
+   - Captura KYC: pasaporte, NIE, certificado de fondos
    - Detectar duplicados por email
+   - Encriptación de campos sensibles en Supabase
 
-[9] GESTIÓN DE CAPTACIÓN
-   - Iniciar proceso de valoración para leads captación
+[8] GESTIÓN DE CAPTACIÓN
+   - Iniciar proceso de valoración
    - Solicitar fotos y documentos del vendedor
    - Generar comparables automáticos
 
 
 ─── PRIORIDAD BAJA / TÉCNICA ─────────────────────────────────────
 
-[10] OPERACIONALES
+[9] OPERACIONALES
    - Rate limiting por IP/usuario en /api/chat
    - Fallback a Gemini si NVIDIA se cae
    - Logs estructurados (JSON)
 
-[11] DEUDA TÉCNICA
+[10] DEUDA TÉCNICA
    - syncLogToDrive en testAgent sin uso → eliminar
    - triggerCmsPropertyPublish sin destino real
    - escaneoModelos.ts + escaneoNvidia.ts → mover a /scripts
    - checkModels.ts redundante
 
-[12] OBSERVABILIDAD
+[11] OBSERVABILIDAD
    - Dashboard de conversaciones activas
    - Coste por lead cualificado (tokens × precio)
 
 
 ─── IDEAS A FUTURO ───────────────────────────────────────────────
 
-[13] FUNCIONES PREMIUM
-   - Matching automático: nuevas propiedades → leads compatibles
+[12] FUNCIONES PREMIUM
    - Reportes de mercado mensuales para inversores VIP
    - Realidad aumentada: ver mobiliario en propiedad vacía
 
-[14] INTEGRACIONES EXTERNAS
+[13] INTEGRACIONES EXTERNAS
    - Idealista / Fotocasa: publicación automática
    - Tasadora externa para validar precios
    - Notarios: agenda de firma
 
-[15] COMPLIANCE
+[14] COMPLIANCE
    - GDPR: política de retención de datos
-   - AML/KYC: verificación automática vs listas sancionadas
+   - AML/KYC: verificación vs listas sancionadas
+   - Logs de auditoría
 
 
 ═══════════════════════════════════════════════════════════════════
   TOP 3 PRÓXIMA SESIÓN:
 
-  1. Conectar chat widget en The Edit Marbella
-  2. Arreglar message vacío en respuesta del endpoint
+  1. agendarVisita en route.ts para producción
+  2. Chat widget en The Edit Marbella
   3. Verificar dominio theeditmarbella.com en Resend
 ═══════════════════════════════════════════════════════════════════
-
-─── SESIÓN 25/05/2026 ────────────────────────────────────────────
-
-[✅] Notificación email a Enrique — operativo end-to-end
-     - Detección automática nombre + email + presupuesto del mensaje
-     - Inserción en Supabase + llamada directa a /api/notify
-     - Resend desde onboarding@resend.dev
-     - Pendiente: verificar dominio theeditmarbella.com en Resend
-
-[✅] Message vacío arreglado — respuesta construida con propiedades reales
-[✅] Endpoint en producción: harvis-six.vercel.app
-
-─── TOP 3 PRÓXIMA SESIÓN ─────────────────────────────────────────
-
-1. Conectar chat widget en The Edit Marbella
-2. Verificar dominio theeditmarbella.com en Resend
-3. Mejorar respuesta cuando no hay propiedades exactas
-
-─── SESIÓN 25/05/2026 (madrugada) ───────────────────────────────
-
-[✅] Google Calendar — agendarVisita operativo
-     - Crea evento en calendario de Enrique
-     - Email al cliente con archivo .ics adjunto
-     - Memoria: recuerda al cliente entre sesiones
-
-[→] PRÓXIMA SESIÓN:
-     - Añadir agendarVisita al route.ts para producción
-     - Conectar chat widget en The Edit Marbella
-     - Verificar dominio theeditmarbella.com en Resend
