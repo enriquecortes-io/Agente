@@ -115,3 +115,30 @@
  2. agendarVisita en route.ts para producción
  3. Verificar dominio theeditmarbella.com en Resend
 ═══════════════════════════════════════════════════════════════════
+
+
+─── SEGURIDAD ────────────────────────────────────────────────────
+
+[CRÍTICO]
+[S1] API key en frontend — nunca exponer x-agent-key en el widget
+    Solución: proxy server-side en Next.js de The Edit
+[S2] Sin rate limiting en /api/chat — bot puede agotar cuota NVIDIA + Resend
+    Solución: Upstash Redis o middleware de Vercel
+[S3] /api/notify sin autenticación real — x-webhook-key no se valida en código
+    Solución: validar el header antes de procesar el payload
+[S4] /api/cron/seguimiento expuesto — CRON_SECRET conocido = emails masivos
+    Solución: añadir IP whitelist de Vercel Cron
+
+[MEDIO]
+[S5] Logs con datos personales — emails y nombres en Vercel logs (GDPR)
+    Solución: anonimizar logs en producción
+[S6] Sin sanitización de input — prompt injection posible en mensajeUsuario
+    Solución: strip de caracteres de control antes de enviar a NVIDIA
+[S7] Drive docs maestros accesibles por docId — historial de todos los clientes
+    Solución: mover a docs privados o encriptar contenido sensible
+
+[BAJO]
+[S8] onboarding@resend.dev como from — Resend puede deshabilitarlo sin aviso
+    Solución: verificar dominio theeditmarbella.com en Resend (ya en pendiente)
+[S9] SUPABASE_SERVICE_ROLE_KEY expuesta — breach de Vercel = acceso total a BD
+    Solución: RLS estricto + ANON_KEY para lecturas cuando sea posible
