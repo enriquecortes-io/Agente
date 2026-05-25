@@ -72,7 +72,7 @@ export async function POST(req: Request) {
     const nombreStr = contacto.nombre;
     const contactoStr = contacto.email || contacto.phone || '';
     console.log(`[${requestId}] auto-crm: ${nombreStr} / ${contactoStr} / ${tipoLeadCrm}`);
-    await sendCrmLeadNotification({
+    sendCrmLeadNotification({
       nombre: nombreStr, contacto: contactoStr,
       presupuesto: contacto.presupuesto || undefined,
       notasCualificacion: ultimoMensaje.slice(0, 300), tipoLead: tipoLeadCrm,
