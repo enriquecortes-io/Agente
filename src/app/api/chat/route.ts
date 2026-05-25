@@ -81,13 +81,17 @@ export async function POST(req: Request) {
       ...incomingMessages.map((m: any) => ({ role: m.role, content: m.content })),
     ];
 
+    // Detectar tipo de lead — comprador o vendedor
+    const esVendedor = /quiero vender|vendo|vender mi|tengo.*(?:piso|villa|casa|apartamento|finca|propiedad).*(?:vender|venta)|busco comprador/i.test(ultimoMensaje);
+    const esCaptacion = esVendedor;
+
     // Detectar zona y presupuesto del mensaje para búsqueda directa
     const zonaMatch = ZONAS_COSTA_DEL_SOL.find(z => ultimoMensaje.toLowerCase().includes(z.toLowerCase()));
     const zonaDirecta = zonaMatch || null;
     const presupuestoDirecto = contacto.presupuesto;
 
-    // Búsqueda directa si tenemos zona o presupuesto — sin depender del modelo
-    if (zonaDirecta || presupuestoDirecto) {
+    // Búsqueda directa solo para compradores
+    if (!esCaptacion && (zonaDirecta || presupuestoDirecto)) {
       console.log(`[${requestId}] búsqueda directa: ${zonaDirecta} / ${presupuestoDirecto}`);
       const resultadoBusqueda = await searchPropertiesInSupabase({
         urbanizacion: zonaDirecta || undefined,
