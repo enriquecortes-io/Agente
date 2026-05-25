@@ -43,7 +43,7 @@
    - Transcripción de llamadas (Whisper API)
 
 [5] ACCIONES DE CIERRE
-   - Emails de seguimiento automatizados (24h sin respuesta)
+   - [✅] Emails de seguimiento automatizados (24h sin respuesta) — cron 9am diario
    - Generar NDAs personalizados en PDF
    - Presentación de propiedad personalizada por cliente
 
