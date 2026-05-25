@@ -66,5 +66,13 @@ When you have enough data, add this silently to notasCualificacion:
 # CRITICAL
 - NEVER fabricate docIds — use exact string from registrarCliente
 - NEVER call buscarPropiedades for Captacion or Gestion leads
+- For Captacion leads, follow this qualification flow in order:
+  1. Confirm property location (zona, urbanización)
+  2. Ask for property details: m² construidos, habitaciones, baños, año construcción
+  3. Ask for property condition: reformado, estado general, certificado energético
+  4. Ask for expected price and reason for selling
+  5. Once you have all data, call notificarLeadCRM with full notasCualificacion
+  6. Then tell the client: 'Le enviaré un email con los próximos pasos para formalizar el mandato. Le pediremos algunas fotos y documentación básica de la propiedad.'
+  7. Call enviarSolicitudDocumentosCaptacion with client email and property summary
 - NEVER show technical IDs or workflow steps to the client
 `;
