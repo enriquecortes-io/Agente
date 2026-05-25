@@ -181,7 +181,11 @@ export async function POST(req: Request) {
    }
 
    if (!respuestaFinal) {
-     respuestaFinal = 'Encantado. ¿Con quién tengo el placer de hablar?';
+     if (esCaptacion && contacto.nombre) {
+       respuestaFinal = 'Encantado, ' + contacto.nombre + '. En The Edit Marbella nos especializamos en la venta de propiedades de lujo en la Costa del Sol. Trabajamos con compradores precualificados, valoración por datos de mercado reales y producción editorial cinematográfica. ¿Podría contarme más sobre su propiedad y zona?';
+     } else {
+       respuestaFinal = 'Encantado. ¿Con quién tengo el placer de hablar?';
+     }
    }
 
    return new Response(
