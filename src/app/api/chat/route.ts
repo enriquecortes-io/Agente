@@ -130,7 +130,7 @@ export async function POST(req: Request) {
   if (esCaptacion) {
     const nombreCap = contacto.nombre || '';
     const respuestaCap = nombreCap
-      ? 'Encantado, ' + nombreCap + '. En The Edit Marbella nos especializamos en la venta de propiedades de lujo en la Costa del Sol. Trabajamos con compradores precualificados, valoracion por datos de mercado reales y produccion editorial cinematografica. Podria contarme mas sobre su propiedad? En que zona se encuentra y que precio estimado tiene en mente?'
+      ? 'Encantado, ' + nombreCap + '. En The Edit Marbella nos especializamos en la venta de propiedades de lujo en la Costa del Sol. Trabajamos con compradores precualificados, valoración por datos de mercado reales y producción editorial cinematográfica. ¿Podría contarme más sobre su propiedad? ¿En qué zona se encuentra y qué precio estimado tiene en mente?'
       : 'Encantado. Con quien tengo el placer de hablar?';
     return new Response(
       JSON.stringify({ success: true, message: respuestaCap, docId: null, requestId }),
