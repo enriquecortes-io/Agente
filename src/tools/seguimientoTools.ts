@@ -136,3 +136,36 @@ export async function ejecutarSeguimientos() {
 
   return { total: leads.length, resultados };
 }
+
+export async function marcarLeadsFrios() {
+  const hace7d  = new Date(Date.now() - 7  * 24 * 60 * 60 * 1000).toISOString();
+  const hace14d = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
+
+  // Leads sin conversación en 7-14 días → fríos
+  const { data: frios } = await supabase
+    .from('leads')
+    .select('id, name, score')
+    .lt('created_at', hace7d)
+    .gt('created_at', hace14d)
+    .neq('estado', 'frio')
+    .neq('estado', 'perdido');
+
+  for (const lead of frios || []) {
+    await supabase.from('leads').update({ estado: 'frio', score: Math.max(0, (lead.score || 0) - 20) }).eq('id', lead.id);
+    console.log('[Seguimiento] Lead frío:', lead.name);
+  }
+
+  // Leads sin conversación > 14 días → perdidos
+  const { data: perdidos } = await supabase
+    .from('leads')
+    .select('id, name, score')
+    .lt('created_at', hace14d)
+    .neq('estado', 'perdido');
+
+  for (const lead of perdidos || []) {
+    await supabase.from('leads').update({ estado: 'perdido', score: 0 }).eq('id', lead.id);
+    console.log('[Seguimiento] Lead perdido:', lead.name);
+  }
+
+  return { frios: frios?.length || 0, perdidos: perdidos?.length || 0 };
+}
