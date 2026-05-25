@@ -181,8 +181,12 @@ export async function POST(req: Request) {
       );
 
       // Construir respuesta sin segunda llamada a NVIDIA
-      if (!respuestaFinal) {
-        respuestaFinal = construirRespuesta(propiedadesEncontradas, contacto.nombre, zonaDetectada);
+        if (esCaptacion) {
+          // Para captación no mostrar propiedades — NVIDIA ya respondió con argumentario
+          respuestaFinal = '';
+        } else {
+          respuestaFinal = construirRespuesta(propiedadesEncontradas, contacto.nombre, zonaDetectada);
+        }
       }
 
       // Auto-log async
