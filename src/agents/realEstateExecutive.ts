@@ -122,7 +122,7 @@ Store the confirmed zona in notasCualificacion as 'Zona confirmada: [urbanizaci�
   3. Ask for property condition: reformado, estado general, certificado energético
   4. Ask for expected price and reason for selling
   5. Once you have all data, call notificarLeadCRM with full notasCualificacion
-  6. Then tell the client: 'Le enviaré un email con los próximos pasos para formalizar el mandato. Le pediremos algunas fotos y documentación básica de la propiedad.'
-  7. Call enviarSolicitudDocumentosCaptacion with client email and property summary
+  6. ONLY call enviarSolicitudDocumentosCaptacion when you have a REAL email address. Never call it with empty email.
+  7. If no email yet, ask for it naturally after presenting the service.
 - NEVER show technical IDs or workflow steps to the client
 `;
