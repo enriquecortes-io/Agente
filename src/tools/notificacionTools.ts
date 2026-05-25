@@ -50,7 +50,7 @@ export async function notificarEnrique(lead: LeadNotificacion) {
              <td style="padding: 12px 0; border-bottom: 1px solid #1a1a1a; color: #c8a96a;">${lead.contacto}</td>
            </tr>
            <tr>
-             <td style="padding: 12px 0; border-bottom: 1px solid #1a1a1a; color: #8a7a6a; font-size: 12px; letter-spacing: 1px; text-transform: uppercase;">Presupuesto</td>
+             <td style="padding: 12px 0; border-bottom: 1px solid #1a1a1a; color: #8a7a6a; font-size: 12px; letter-spacing: 1px; text-transform: uppercase;">${lead.tipoLead === "Captacion" ? "Valoración estimada" : "Presupuesto"}</td>
              <td style="padding: 12px 0; border-bottom: 1px solid #1a1a1a; color: #e8e0d0;">${presupuestoFormateado}</td>
            </tr>
            <tr>
@@ -65,7 +65,7 @@ export async function notificarEnrique(lead: LeadNotificacion) {
          </div>
 
          <div style="text-align: center;">
-           <a href="https://supabase.com/dashboard" style="display: inline-block; background: #c8a96a; color: #0a0a0a; padding: 12px 32px; text-decoration: none; font-size: 12px; letter-spacing: 2px; text-transform: uppercase; border-radius: 2px;">Ver en CRM</a>
+           <a href="https://mdlm-xi.vercel.app/es/admin" style="display: inline-block; background: #c8a96a; color: #0a0a0a; padding: 12px 32px; text-decoration: none; font-size: 12px; letter-spacing: 2px; text-transform: uppercase; border-radius: 2px;">Ver en CRM</a>
          </div>
 
          <p style="color: #3a3a3a; font-size: 11px; text-align: center; margin-top: 32px;">

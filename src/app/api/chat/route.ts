@@ -137,7 +137,7 @@ export async function POST(req: Request) {
           { type: 'function', function: { name: 'buscarPropiedades', description: 'Busca propiedades para leads Venta.', parameters: { type: 'object', properties: { zona: { type: 'string' }, precioMax: { type: 'number' } } } } },
         ],
         tool_choice: 'auto',
-        max_tokens: 800,
+        max_tokens: 600,
         temperature: 0.4,
       }),
     });
