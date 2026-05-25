@@ -129,3 +129,15 @@
 1. Conectar chat widget en The Edit Marbella
 2. Verificar dominio theeditmarbella.com en Resend
 3. Mejorar respuesta cuando no hay propiedades exactas
+
+─── SESIÓN 25/05/2026 (madrugada) ───────────────────────────────
+
+[✅] Google Calendar — agendarVisita operativo
+     - Crea evento en calendario de Enrique
+     - Email al cliente con archivo .ics adjunto
+     - Memoria: recuerda al cliente entre sesiones
+
+[→] PRÓXIMA SESIÓN:
+     - Añadir agendarVisita al route.ts para producción
+     - Conectar chat widget en The Edit Marbella
+     - Verificar dominio theeditmarbella.com en Resend
