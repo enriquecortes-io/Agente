@@ -155,8 +155,34 @@ export async function POST(req: Request) {
      }),
    });
 
-   if (!res.ok) throw new Error(`NVIDIA ${res.status}`);
-   const data = await res.json();
+   if (!res.ok) {
+     console.log(`[${requestId}] NVIDIA fallo - intentando Gemini`);
+     const geminiKey = process.env.GEMINI_API_KEY;
+     if (geminiKey) {
+       const gRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`, {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({
+           contents: messages.filter((m: any) => m.role !== 'system').map((m: any) => ({
+             role: m.role === 'assistant' ? 'model' : 'user',
+             parts: [{ text: m.content }],
+           })),
+           systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+           generationConfig: { maxOutputTokens: 600, temperature: 0.4 },
+         }),
+       });
+       if (gRes.ok) {
+         const gData = await gRes.json();
+         const gText = gData.candidates?.[0]?.content?.parts?.[0]?.text || '';
+         return new Response(
+           JSON.stringify({ success: true, message: gText, docId: null, requestId, fallback: 'gemini' }),
+           { status: 200, headers: { 'Content-Type': 'application/json' } }
+         );
+       }
+     }
+     throw new Error(`NVIDIA ${res.status}`);
+   }
+  const data = await res.json();
    const assistantMsg = data.choices?.[0]?.message;
    let respuestaFinal = assistantMsg?.content || '';
    let docId: string | null = null;
