@@ -4,6 +4,7 @@ dotenv.config({ path: '.env.local' });
 import { searchPropertiesInSupabase, guardarConversacionSupabase, recuperarHistorialCliente } from './tools/supabaseTools.js';
 import { prepararEntornoCliente, actualizarHistorial, borrarCarpetasAntiguas } from './tools/driveLogger.js';
 import { sendCrmLeadNotification } from './tools/webhookTools.js';
+import { agendarVisita } from './tools/calendarTools.js';
 import { SYSTEM_PROMPT } from './agents/realEstateExecutive.js';
 
 const OK   = '✅';
@@ -89,6 +90,7 @@ async function testAgenteDirecto(mensaje = 'Hola, soy Carlos García, busco una 
     { type: 'function', function: { name: 'registrarCliente', description: 'Registra al cliente en Drive. Llama esto SIEMPRE al inicio.', parameters: { type: 'object', properties: { nombreCliente: { type: 'string' }, tipoLead: { type: 'string', enum: ['Venta','Captacion','Gestion'] } }, required: ['nombreCliente','tipoLead'] } } },
     { type: 'function', function: { name: 'guardarConversacion', description: 'Guarda el turno. Llama esto UNA SOLA VEZ tras responder al cliente.', parameters: { type: 'object', properties: { docId: { type: 'string' }, clienteNombre: { type: 'string' }, tipoLead: { type: 'string' }, mensajeUsuario: { type: 'string' }, respuestaAgente: { type: 'string' } }, required: ['docId','mensajeUsuario','respuestaAgente'] } } },
     { type: 'function', function: { name: 'buscarPropiedades', description: 'Busca propiedades. Solo para leads de Venta.', parameters: { type: 'object', properties: { zona: { type: 'string' }, precioMax: { type: 'number' } } } } },
+    { type: 'function', function: { name: 'agendarVisita', description: 'Agenda una visita privada en Google Calendar y envía email de confirmación al cliente con archivo .ics.', parameters: { type: 'object', properties: { nombreCliente: { type: 'string' }, emailCliente: { type: 'string' }, propiedadTitulo: { type: 'string' }, propiedadUrl: { type: 'string' }, fecha: { type: 'string', description: 'Formato YYYY-MM-DD' }, hora: { type: 'string', description: 'Formato HH:MM' }, notas: { type: 'string' } }, required: ['nombreCliente','propiedadTitulo','fecha','hora'] } } },
     { type: 'function', function: { name: 'notificarLeadCRM', description: 'Registra lead en CRM. Llama esto UNA SOLA VEZ cuando tengas nombre + contacto + presupuesto.', parameters: { type: 'object', properties: { nombre: { type: 'string' }, contacto: { type: 'string' }, presupuesto: { type: 'number' }, notasCualificacion: { type: 'string' }, tipoLead: { type: 'string' } }, required: ['nombre','contacto','notasCualificacion'] } } },
   ];
 
@@ -156,6 +158,8 @@ async function testAgenteDirecto(mensaje = 'Hola, soy Carlos García, busco una 
             resultado = { success: true };
           }
 
+        } else if (nombre === 'agendarVisita') {
+          resultado = await agendarVisita(args);
         } else if (nombre === 'buscarPropiedades') {
           resultado = await searchPropertiesInSupabase({ urbanizacion: args.zona, municipioDeducido: args.zona, precioMax: args.precioMax });
 
@@ -232,7 +236,7 @@ async function testCalendar() {
   const { agendarVisita } = await import('./tools/calendarTools.js');
   log('agendarVisita', await agendarVisita({
     nombreCliente: 'James Wilson',
-    emailCliente: 'james@wilson.com',
+    emailCliente: 'enriquecortesgomez@gmail.com',
     propiedadTitulo: 'Villa Golden Mile',
     propiedadUrl: 'https://mdlm-xi.vercel.app/es/propiedades/villa-golden-mile',
     fecha: '2026-06-10',
