@@ -1,6 +1,6 @@
 ═══════════════════════════════════════════════════════════════════
-  HARVIS — TAREAS PENDIENTES
-  Actualizado: 25/05/2026
+ HARVIS — TAREAS PENDIENTES
+ Actualizado: 25/05/2026 (noche)
 ═══════════════════════════════════════════════════════════════════
 
 
@@ -12,97 +12,106 @@
 [✅] Clasificación Venta/Captacion/Gestion
 [✅] Cualificación profunda: timeline, urgencia, motivación, perfil
 [✅] Búsqueda de propiedades con URLs de The Edit Marbella
-[✅] Deduplicación de leads en Supabase
-[✅] Deduplicación de carpetas en Drive
+[✅] Sin fallbacks — respuesta curada cuando no hay match exacto
+[✅] Deduplicación de leads en Supabase y carpetas en Drive
 [✅] Notificación a Enrique via Resend (onboarding@resend.dev)
 [✅] Google Calendar — visita agendada + email .ics al cliente
-[✅] Respuesta construida con propiedades cuando hay zona/presupuesto
+[✅] NDA personalizado en PDF bilingüe ES/EN via Resend
+[✅] Emails de seguimiento automatizados — cron 9am diario
+[✅] Detección pérdida de interés — leads fríos 7d, perdidos 14d
+[✅] Scoring automático de leads (presupuesto × urgencia × motivación)
+[✅] Matching automático nuevas propiedades → leads compatibles
+[✅] Gestión captación — flujo cualificación + solicitud documentos
+[✅] Argumentario captación — 6 diferenciales The Edit Marbella
+[✅] Detección zona por lista + Nominatim para urbanizaciones
+[✅] Detección vendedor vs comprador en route.ts
+[✅] Respuesta rápida captación sin llamar a NVIDIA (1 segundo)
+[✅] RLS activado en Supabase (leads y conversaciones)
+[✅] Botón "Ver en CRM" → admin panel The Edit Marbella
+[✅] Label "Valoración estimada" para leads de captación
 
 
 ─── PRIORIDAD ALTA ───────────────────────────────────────────────
 
-[1] AÑADIR agendarVisita AL ENDPOINT DE PRODUCCIÓN
-   - Está en testAgent pero no en route.ts
-   - Harvis debe poder agendar visitas desde la web
+[1] CONEXIÓN A THE EDIT MARBELLA
+  - Chat widget en mdlm-xi.vercel.app
+  - POST a /api/chat con x-agent-key
+  - Historial en localStorage del navegador
 
-[2] CONEXIÓN A THE EDIT MARBELLA
-   - Chat widget en mdlm-xi.vercel.app
-   - POST a /api/chat con x-agent-key
-   - Historial en localStorage del navegador
+[2] agendarVisita EN ROUTE.TS DE PRODUCCIÓN
+  - Está en testAgent pero no en route.ts
+  - Harvis debe poder agendar visitas desde la web
 
 [3] VERIFICAR DOMINIO EN RESEND
-   - theeditmarbella.com en resend.com/domains
-   - Emails desde harvis@theeditmarbella.com
+  - theeditmarbella.com en resend.com/domains
+  - Emails desde harvis@theeditmarbella.com
 
 
 ─── PRIORIDAD MEDIA ──────────────────────────────────────────────
 
 [4] CANALES ADICIONALES
-   - WhatsApp Business API (Meta — en proceso de aprobación)
-   - Email entrante (Resend Inbound)
-   - Transcripción de llamadas (Whisper API)
+  - WhatsApp Business API (Meta — en proceso de aprobación)
+  - Email entrante (Resend Inbound — requiere dominio verificado)
+  - Transcripción de llamadas (Whisper API)
 
-[5] ACCIONES DE CIERRE
-   - [✅] Emails de seguimiento automatizados (24h sin respuesta) — cron 9am diario
-   - Generar NDAs personalizados en PDF
-   - Presentación de propiedad personalizada por cliente
+[5] PRESENTACIÓN DE PROPIEDAD PERSONALIZADA
+  - PDF de lujo con fotos desde Drive + datos del cliente
+  - Pendiente: organizar fotos en Drive por propiedad
 
-[6] INTELIGENCIA COMERCIAL
-   - Priorizar leads por valor potencial
-   - Detectar pérdida de interés (silencio > X días)
-   - Cross-selling: villa de mayor precio si encaja el perfil
-   - Matching: nuevas propiedades → leads compatibles
+[6] COMPARABLES AUTOMÁTICOS (captación)
+  - Valoración basada en propiedades similares en Supabase
+  - Futuro: integración tasadora externa
 
-[7] DATOS DEL CLIENTE
-   - Captura KYC: pasaporte, NIE, certificado de fondos
-   - Detectar duplicados por email
-   - Encriptación de campos sensibles en Supabase
+[7] INTELIGENCIA COMERCIAL
+  - Cross-selling: villa de mayor precio si encaja el perfil
+  - Reportes de mercado mensuales para inversores VIP
 
-[8] GESTIÓN DE CAPTACIÓN
-   - Iniciar proceso de valoración
-   - Solicitar fotos y documentos del vendedor
-   - Generar comparables automáticos
+[8] DATOS DEL CLIENTE
+  - Captura KYC: pasaporte, NIE, certificado de fondos
 
 
 ─── PRIORIDAD BAJA / TÉCNICA ─────────────────────────────────────
 
 [9] OPERACIONALES
-   - Rate limiting por IP/usuario en /api/chat
-   - Fallback a Gemini si NVIDIA se cae
-   - Logs estructurados (JSON)
+  - Rate limiting por IP/usuario en /api/chat
+  - Fallback a Gemini si NVIDIA se cae
+  - Logs estructurados (JSON)
 
 [10] DEUDA TÉCNICA
-   - syncLogToDrive en testAgent sin uso → eliminar
-   - triggerCmsPropertyPublish sin destino real
-   - escaneoModelos.ts + escaneoNvidia.ts → mover a /scripts
-   - checkModels.ts redundante
+  - syncLogToDrive sin uso → eliminar
+  - triggerCmsPropertyPublish sin destino real
+  - escaneoModelos.ts + escaneoNvidia.ts → mover a /scripts
 
-[11] OBSERVABILIDAD
-   - Dashboard de conversaciones activas
-   - Coste por lead cualificado (tokens × precio)
+[11] GEOCODING
+  - Mapbox o Google Maps cuando el volumen justifique el coste
+  - Actualmente: Nominatim + pregunta al cliente si no reconoce
+
+[12] OBSERVABILIDAD
+  - Dashboard conversaciones activas
+  - Coste por lead cualificado (tokens × precio)
 
 
 ─── IDEAS A FUTURO ───────────────────────────────────────────────
 
-[12] FUNCIONES PREMIUM
-   - Reportes de mercado mensuales para inversores VIP
-   - Realidad aumentada: ver mobiliario en propiedad vacía
+[13] FUNCIONES PREMIUM
+  - Realidad aumentada: ver mobiliario en propiedad vacía
+  - Video tours con IA (Sora, Veo)
 
-[13] INTEGRACIONES EXTERNAS
-   - Idealista / Fotocasa: publicación automática
-   - Tasadora externa para validar precios
-   - Notarios: agenda de firma
+[14] INTEGRACIONES EXTERNAS
+  - Idealista / Fotocasa: publicación automática
+  - Tasadora externa para validar precios
+  - Notarios: agenda de firma
 
-[14] COMPLIANCE
-   - GDPR: política de retención de datos
-   - AML/KYC: verificación vs listas sancionadas
-   - Logs de auditoría
+[15] COMPLIANCE
+  - GDPR: política de retención de datos
+  - AML/KYC: verificación vs listas sancionadas
+  - Logs de auditoría
 
 
 ═══════════════════════════════════════════════════════════════════
-  TOP 3 PRÓXIMA SESIÓN:
+ TOP 3 PRÓXIMA SESIÓN:
 
-  1. agendarVisita en route.ts para producción
-  2. Chat widget en The Edit Marbella
-  3. Verificar dominio theeditmarbella.com en Resend
+ 1. Chat widget en The Edit Marbella
+ 2. agendarVisita en route.ts para producción
+ 3. Verificar dominio theeditmarbella.com en Resend
 ═══════════════════════════════════════════════════════════════════
