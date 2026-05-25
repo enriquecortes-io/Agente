@@ -73,3 +73,4 @@ export async function generarYEnviarNDA(datos: NDAData) {
     return { success: false, error: error.message };
   }
 }
+// Mon May 25 19:21:00 UTC 2026
