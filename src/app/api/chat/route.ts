@@ -77,7 +77,7 @@ export async function POST(req: Request) {
       presupuesto: contacto.presupuesto || undefined,
       notasCualificacion: ultimoMensaje.slice(0, 300), tipoLead: tipoLeadCrm,
     }).catch(() => {});
-    await fetch('https://harvis-six.vercel.app/api/notify', {
+    fetch('https://harvis-six.vercel.app/api/notify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
