@@ -82,8 +82,8 @@ export async function POST(req: Request) {
     ];
 
     // Detectar zona y presupuesto del mensaje para búsqueda directa
-    const zonaMatch = ultimoMensaje.match(/(?:en|zona|área)s+([A-ZÁÉÍÓÚÑa-záéíóúñ][ws]{2,30}?)(?:,|.|con|y|mi)/i);
-    const zonaDirecta = zonaMatch?.[1]?.trim() || null;
+    const zonaMatch = ZONAS_COSTA_DEL_SOL.find(z => ultimoMensaje.toLowerCase().includes(z.toLowerCase()));
+    const zonaDirecta = zonaMatch || null;
     const presupuestoDirecto = contacto.presupuesto;
 
     // Búsqueda directa si tenemos zona o presupuesto — sin depender del modelo
