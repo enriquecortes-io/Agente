@@ -215,6 +215,7 @@ async function main() {
     else if (arg === 'memoria')  { await testMemoria(); }
     else if (arg === 'agente')   { await testAgenteDirecto(chatMsg); }
     else if (arg === 'calendar')  { await testCalendar(); }
+    else if (arg === 'nda')       { await testNDA(); }
     else {
       await testSupabase();
       await testDrive();
@@ -242,5 +243,16 @@ async function testCalendar() {
     fecha: '2026-06-10',
     hora: '11:00',
     notas: 'Cliente relocalización desde Londres. Presupuesto 8M.',
+  }));
+}
+
+async function testNDA() {
+  header('NDA — Generar y enviar PDF');
+  const { generarYEnviarNDA } = await import('./tools/ndaTools.js');
+  log('generarYEnviarNDA', await generarYEnviarNDA({
+    nombreCliente: 'James Wilson',
+    emailCliente: 'enriquecortesgomez@gmail.com',
+    propiedadTitulo: 'Villa Golden Mile',
+    propiedadReferencia: 'VIL-110',
   }));
 }
