@@ -13,6 +13,10 @@ export async function POST(req: Request) {
  try {
    const body = await req.json();
    const propiedad = body.record;
+    // titulo es jsonb — extraer texto
+    if (propiedad.titulo && typeof propiedad.titulo === 'object') {
+      propiedad.titulo = propiedad.titulo.es || propiedad.titulo.en || 'Propiedad exclusiva';
+    }
    if (!propiedad) return new Response(JSON.stringify({ error: 'Sin record' }), { status: 400 });
 
    console.log(`[Matching] Nueva propiedad: ${propiedad.titulo} — ${propiedad.precio}€`);
