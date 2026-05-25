@@ -210,6 +210,7 @@ async function main() {
     else if (arg === 'drive')    { await testDrive(); }
     else if (arg === 'memoria')  { await testMemoria(); }
     else if (arg === 'agente')   { await testAgenteDirecto(chatMsg); }
+    else if (arg === 'calendar')  { await testCalendar(); }
     else {
       await testSupabase();
       await testDrive();
@@ -225,3 +226,17 @@ async function main() {
 }
 
 main();
+
+async function testCalendar() {
+  header('Google Calendar — Agendar visita');
+  const { agendarVisita } = await import('./tools/calendarTools.js');
+  log('agendarVisita', await agendarVisita({
+    nombreCliente: 'James Wilson',
+    emailCliente: 'james@wilson.com',
+    propiedadTitulo: 'Villa Golden Mile',
+    propiedadUrl: 'https://mdlm-xi.vercel.app/es/propiedades/villa-golden-mile',
+    fecha: '2026-06-10',
+    hora: '11:00',
+    notas: 'Cliente relocalización desde Londres. Presupuesto 8M.',
+  }));
+}
