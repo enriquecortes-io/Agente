@@ -216,6 +216,7 @@ async function main() {
     else if (arg === 'agente')   { await testAgenteDirecto(chatMsg); }
     else if (arg === 'calendar')  { await testCalendar(); }
     else if (arg === 'nda')       { await testNDA(); }
+    else if (arg === 'geo')       { await testGeocoding(); }
     else {
       await testSupabase();
       await testDrive();
@@ -255,4 +256,14 @@ async function testNDA() {
     propiedadTitulo: 'Villa Golden Mile',
     propiedadReferencia: 'VIL-110',
   }));
+}
+
+async function testGeocoding() {
+  header('Geocoding — Identificar zona');
+  const { identificarZona } = await import('./tools/geocodingTools.js');
+  const casos = ['Las Nayades', 'Torre Bermeja', 'La Heredia', 'Los Arqueros', 'Imara'];
+  for (const caso of casos) {
+    const result = await identificarZona(caso);
+    console.log(`${caso.padEnd(20)} → ${result?.municipio || 'NO ENCONTRADO'}`);
+  }
 }
