@@ -64,14 +64,27 @@ export async function POST(req: Request) {
 
   // Detectar contacto e insertar lead — dispara webhook Supabase → Resend
   const contacto = detectarContacto(ultimoMensaje);
+  const esVendedorCrm = /quiero vender|vendo|vender mi|tengo.*(?:piso|villa|casa|apartamento|finca|propiedad).*(?:vender|venta)|busco comprador/i.test(ultimoMensaje);
+  const tipoLeadCrm = esVendedorCrm ? 'Captacion' : 'Venta';
+  const zonaCrm = ZONAS_COSTA_DEL_SOL.find(z => ultimoMensaje.toLowerCase().includes(z.toLowerCase())) || undefined;
+
   if (contacto.nombre && (contacto.email || contacto.phone)) {
     const nombreStr = contacto.nombre;
     const contactoStr = contacto.email || contacto.phone || '';
-    console.log(`[${requestId}] auto-crm: ${nombreStr} / ${contactoStr}`);
+    console.log(`[${requestId}] auto-crm: ${nombreStr} / ${contactoStr} / ${tipoLeadCrm}`);
     await sendCrmLeadNotification({
       nombre: nombreStr, contacto: contactoStr,
       presupuesto: contacto.presupuesto || undefined,
-      notasCualificacion: ultimoMensaje.slice(0, 300), tipoLead: 'Venta',
+      notasCualificacion: ultimoMensaje.slice(0, 300), tipoLead: tipoLeadCrm,
+    }).catch(() => {});
+    await fetch('https://harvis-six.vercel.app/api/notify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'INSERT',
+        table: tipoLeadCrm === 'Captacion' ? 'captacion_leads' : 'leads',
+        record: { name: nombreStr, email: contactoStr, notas: ultimoMensaje.slice(0, 300), zona: zonaCrm },
+      }),
     }).catch(() => {});
   }
 
@@ -81,9 +94,8 @@ export async function POST(req: Request) {
       ...incomingMessages.map((m: any) => ({ role: m.role, content: m.content })),
     ];
 
-    // Detectar tipo de lead — comprador o vendedor
-    const esVendedor = /quiero vender|vendo|vender mi|tengo.*(?:piso|villa|casa|apartamento|finca|propiedad).*(?:vender|venta)|busco comprador/i.test(ultimoMensaje);
-    const esCaptacion = esVendedor;
+    // Tipo de lead ya detectado arriba
+    const esCaptacion = esVendedorCrm;
 
     // Detectar zona y presupuesto del mensaje para búsqueda directa
     const zonaMatch = ZONAS_COSTA_DEL_SOL.find(z => ultimoMensaje.toLowerCase().includes(z.toLowerCase()));
