@@ -23,6 +23,7 @@ export async function POST(req: Request) {
       ? parseFloat(record.precio_estimado.replace(/[^\d.]/g, '')) || undefined
       : undefined;
     const notas = record.notas || record.mensaje || 'Lead nuevo desde Harvis';
+    const zona = record.zona || undefined;
 
     console.log(`[notify] Nuevo lead ${tipoLead}: ${nombre} / ${contacto}`);
 
@@ -32,6 +33,7 @@ export async function POST(req: Request) {
       presupuesto,
       tipoLead: tipoLead as 'Venta' | 'Captacion' | 'Gestion',
       notasCualificacion: notas,
+      zona,
     });
 
     console.log(`[notify] Resend result:`, JSON.stringify(result));
