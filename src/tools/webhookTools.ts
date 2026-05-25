@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { calcularScore } from './scoringTools.js';
 import dotenv from 'dotenv';
 dotenv.config({ path: '.env.local' });
 
@@ -69,6 +70,17 @@ export async function sendCrmLeadNotification(lead: LeadData) {
         console.log(`[CRM] Lead de ${lead.nombre} ya existe — ignorando duplicado`);
         return { success: true, message: 'Lead ya existente.' };
       }
+      const notasLower = (lead.notasCualificacion || '').toLowerCase();
+      const urgencia = notasLower.includes('urgencia: alta') ? 'alta' : notasLower.includes('urgencia: media') ? 'media' : 'baja';
+      const motivacion = notasLower.includes('inversor') ? 'inversor' : notasLower.includes('reubicaci') ? 'reubicacion' : 'segunda_residencia';
+      const score = calcularScore({
+        nombre: lead.nombre,
+        presupuesto: lead.presupuesto,
+        urgencia: urgencia as 'alta' | 'media' | 'baja',
+        motivacion: motivacion as 'inversor' | 'reubicacion' | 'segunda_residencia',
+        tieneEmail: !!(lead.contacto && lead.contacto.includes('@')),
+        tieneTelefono: !!(lead.contacto && !lead.contacto.includes('@')),
+      });
       const { error } = await supabase.from('leads').insert({
         name: lead.nombre,
         email: esEmail ? lead.contacto : null,
@@ -76,6 +88,9 @@ export async function sendCrmLeadNotification(lead: LeadData) {
         horizon: lead.presupuesto ? `${lead.presupuesto}€` : null,
         notas: notas,
         agente: 'Harvis',
+        score,
+        urgencia,
+        motivacion,
         locale: 'es',
       });
 
