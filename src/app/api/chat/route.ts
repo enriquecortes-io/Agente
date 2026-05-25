@@ -27,7 +27,7 @@ function detectarContacto(mensaje: string) {
 
 function construirRespuesta(propiedades: any[], nombreCliente: string | null, zona: string | null): string {
   if (propiedades.length === 0) {
-    return `Encantado${nombreCliente ? `, ${nombreCliente}` : ''}. En este momento no tenemos propiedades exactas${zona ? ` en ${zona}` : ''}, pero estoy buscando las mejores opciones para ti. ¿Tienes alguna preferencia adicional como número de habitaciones o estilo arquitectónico?`;
+    return `Encantado${nombreCliente ? `, ${nombreCliente}` : ''}. En este momento no tenemos en catálogo una propiedad que encaje exactamente con sus criterios${zona ? ` en ${zona}` : ''}. Lo que sí podemos hacer es realizar una selección curada a medida — accedemos a propiedades off-market y mandatos exclusivos que no aparecen públicamente. ¿Le parece bien que profundicemos en sus requisitos para encontrar exactamente lo que busca?`;
   }
 
   const intro = `Encantado${nombreCliente ? `, ${nombreCliente}` : ''}. He encontrado ${propiedades.length === 1 ? 'esta propiedad' : 'estas propiedades'} que podrían interesarte:\n\n`;
