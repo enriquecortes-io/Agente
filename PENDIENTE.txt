@@ -64,7 +64,7 @@
 
 [7] INTELIGENCIA COMERCIAL
   - Cross-selling: villa de mayor precio si encaja el perfil
-  - Reportes de mercado mensuales para inversores VIP
+  - Reportes de mercado mensuales para propietarios que venden con nosotros
 
 [8] DATOS DEL CLIENTE
   - Captura KYC: pasaporte, NIE, certificado de fondos
