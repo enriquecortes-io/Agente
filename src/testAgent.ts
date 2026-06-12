@@ -217,6 +217,7 @@ async function main() {
     else if (arg === 'calendar')  { await testCalendar(); }
     else if (arg === 'nda')       { await testNDA(); }
     else if (arg === 'geo')       { await testGeocoding(); }
+    else if (arg === 'apify')     { await testApify(); }
     else {
       await testSupabase();
       await testDrive();
@@ -266,4 +267,15 @@ async function testGeocoding() {
     const result = await identificarZona(caso);
     console.log(`${caso.padEnd(20)} → ${result?.municipio || 'NO ENCONTRADO'}`);
   }
+}
+
+async function testApify() {
+  header('Apify — Análisis reels competencia');
+  const { analizarCompetencia } = await import('./tools/apifyTools.js');
+  const username = process.argv[3] || 'engel_voelkers';
+  console.log(`\nAnalizando @${username}...\n`);
+  const { reels, analisis } = await analizarCompetencia(username, 5);
+  console.log(`\n📊 ${reels.length} reels analizados\n`);
+  console.log('─'.repeat(60));
+  console.log(analisis);
 }
