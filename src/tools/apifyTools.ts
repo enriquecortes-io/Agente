@@ -1,5 +1,13 @@
 import dotenv from 'dotenv';
+import { createClient } from '@supabase/supabase-js';
 dotenv.config({ path: '.env.local' });
+
+function getSupabase() {
+  return createClient(
+    process.env.SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY!
+  );
+}
 
 export interface ReelAnalysis {
   url: string;
@@ -16,12 +24,12 @@ export async function scrapeInstagramReels(username: string, maxReels = 10): Pro
   const apiKey = process.env.APIFY_API_KEY;
   if (!apiKey) throw new Error('Falta APIFY_API_KEY en .env.local');
 
-  console.log(`[Apify] Scraping reels de @${username}...`);
-
   const esUrl = username.startsWith('http');
   const payload = esUrl
     ? { directUrls: [username], resultsType: 'posts', resultsLimit: maxReels }
     : { directUrls: [`https://www.instagram.com/${username}/`], resultsType: 'posts', resultsLimit: maxReels, searchType: 'user', searchLimit: maxReels };
+
+  console.log(`[Apify] Scraping @${username}...`);
 
   const runRes = await fetch('https://api.apify.com/v2/acts/apify~instagram-scraper/runs', {
     method: 'POST',
@@ -86,11 +94,11 @@ DATOS DE REELS:
 ${resumen}
 
 Proporciona:
-1. PATRONES QUE FUNCIONAN — que tienen en comun los reels con mas views/engagement
-2. HOOKS MAS EFECTIVOS — como empiezan los mejores reels
-3. HASHTAGS CLAVE — los mas recurrentes en posts con alto engagement
-4. OPORTUNIDADES — que hace la competencia mal que tu puedes hacer mejor
-5. RECOMENDACIONES CONCRETAS — 3 ideas de reels para The Edit Marbella
+1. PATRONES QUE FUNCIONAN
+2. HOOKS MAS EFECTIVOS
+3. HASHTAGS CLAVE
+4. OPORTUNIDADES
+5. RECOMENDACIONES CONCRETAS para The Edit Marbella
 
 Se especifico y accionable.`;
 
@@ -109,26 +117,9 @@ Se especifico y accionable.`;
   return data.choices?.[0]?.message?.content || 'Sin analisis disponible';
 }
 
-export async function analizarCompetencia(username: string, maxReels = 10): Promise<{ reels: ReelAnalysis[]; analisis: string }> {
-  const reels = await scrapeInstagramReels(username, maxReels);
-  console.log(`[Apify] ${reels.length} reels obtenidos de @${username}`);
-  const analisis = await analizarReelsConNvidia(reels, 'The Edit Marbella — agencia inmobiliaria de lujo en Marbella');
-  return { reels, analisis };
-}
-
-import { createClient } from '@supabase/supabase-js';
-
-function getSupabase() {
-  return createClient(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY!
-  );
-}
-
 export async function guardarAnalisisCompetencia(username: string, reels: ReelAnalysis[], analisis: string) {
   const supabase = getSupabase();
 
-  // Extraer hashtags del análisis
   const hashtagMatches = analisis.match(/#\w+/g) || [];
   const hashtags = [...new Set(hashtagMatches)];
 
@@ -139,42 +130,35 @@ export async function guardarAnalisisCompetencia(username: string, reels: ReelAn
     hashtags: { lista: hashtags },
   });
 
-  if (error) {
-    console.error('[Supabase] Error guardando análisis:', error.message);
-  } else {
-    console.log(`[Supabase] Análisis de @${username} guardado`);
-  }
+  if (error) console.error('[Supabase] Error guardando análisis:', error.message);
+  else console.log(`[Supabase] Análisis de @${username} guardado`);
 
-  // Extraer y guardar aprendizajes en marketing_conocimiento
-  const aprendizajes = [
-    ...hashtags.map(h => ({
-      categoria: 'hashtag',
-      contenido: h,
-      fuente: username,
-      veces_visto: 1,
-    })),
-  ];
-
-  for (const ap of aprendizajes) {
-    // Upsert — si ya existe el hashtag de ese competidor, incrementar veces_visto
+  // Guardar hashtags en marketing_conocimiento
+  for (const h of hashtags) {
     const { data: existing } = await supabase
       .from('marketing_conocimiento')
       .select('id, veces_visto')
-      .eq('categoria', ap.categoria)
-      .eq('contenido', ap.contenido)
+      .eq('categoria', 'hashtag')
+      .eq('contenido', h)
       .limit(1);
 
     if (existing?.length) {
-      await supabase
-        .from('marketing_conocimiento')
+      await supabase.from('marketing_conocimiento')
         .update({ veces_visto: (existing[0].veces_visto || 1) + 1, updated_at: new Date().toISOString() })
         .eq('id', existing[0].id);
     } else {
-      await supabase.from('marketing_conocimiento').insert(ap);
+      await supabase.from('marketing_conocimiento').insert({ categoria: 'hashtag', contenido: h, fuente: username, veces_visto: 1 });
     }
   }
 
-  console.log(`[Supabase] ${aprendizajes.length} aprendizajes actualizados`);
+  console.log(`[Supabase] ${hashtags.length} hashtags actualizados`);
+}
+
+export async function analizarCompetencia(username: string, maxReels = 10): Promise<{ reels: ReelAnalysis[]; analisis: string }> {
+  const reels = await scrapeInstagramReels(username, maxReels);
+  console.log(`[Apify] ${reels.length} reels obtenidos de @${username}`);
+  const analisis = await analizarReelsConNvidia(reels, 'The Edit Marbella — agencia inmobiliaria de lujo en Marbella');
+  return { reels, analisis };
 }
 
 export async function analizarYGuardar(username: string, maxReels = 10) {
