@@ -79,8 +79,8 @@ Responde SOLO en este formato JSON exacto:
     body: JSON.stringify({
       model: 'meta/llama-3.3-70b-instruct',
       messages: [{ role: 'user', content: prompt }],
-      max_tokens: 1500,
-      temperature: 0.8,
+      max_tokens: 800,
+      temperature: 0.5,
     }),
   });
 
