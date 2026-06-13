@@ -112,7 +112,11 @@ export async function POST(req: Request) {
     const zonaDirecta = ZONAS_COSTA_DEL_SOL.find(z => ultimoMensaje.toLowerCase().includes(z.toLowerCase())) || null;
     const presupuestoDirecto = contacto.presupuesto;
 
-    if (zonaDirecta || presupuestoDirecto) {
+    // No buscar si ya hay propiedades en historial o es seguimiento
+    const yaHayPropiedades = todosLosMensajes.includes('theeditmarbella.com/es/propiedades');
+    const esMensajeSeguimiento = /visita|agendar|llamada|contacto|interesa|mas info|cuando|disponible|fotos/i.test(ultimoMensaje);
+
+    if ((zonaDirecta || presupuestoDirecto) && !yaHayPropiedades && !esMensajeSeguimiento) {
       console.log(`[${requestId}] búsqueda directa: ${zonaDirecta} / ${presupuestoDirecto}`);
       const resultadoBusqueda = await searchPropertiesInSupabase({
         urbanizacion: zonaDirecta || undefined,
