@@ -49,7 +49,7 @@ Genera copy para Instagram y LinkedIn para esta propiedad:
 - Zona: ${propiedad.zona}
 - Habitaciones: ${propiedad.habitaciones}
 - m²: ${propiedad.m2}
-- URL: https://mdlm-xi.vercel.app/es/propiedades/${propiedad.slug}
+- URL: https://www.theeditmarbella.com/es/propiedades/${propiedad.slug}
 ${propiedad.descripcion ? `- Descripción: ${propiedad.descripcion.slice(0, 200)}` : ''}
 
 REGLAS ALGORITMO INSTAGRAM 2026:
