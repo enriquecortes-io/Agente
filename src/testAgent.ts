@@ -275,7 +275,8 @@ async function testApify() {
   const { analizarCompetencia } = await import('./tools/apifyTools.js');
   const username = process.argv[3] || 'engel_voelkers';
   console.log(`\nAnalizando @${username}...\n`);
-  const { reels, analisis } = await analizarCompetencia(username, 5);
+  const { analizarYGuardar } = await import('./tools/apifyTools.js');
+  const { reels, analisis } = await analizarYGuardar(username, 5);
   console.log(`\n📊 ${reels.length} reels analizados\n`);
   console.log('─'.repeat(60));
   console.log(analisis);
