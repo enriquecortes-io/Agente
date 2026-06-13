@@ -116,5 +116,5 @@ export async function generarPublicacion(propiedad: PropiedadContent) {
     else console.log('[Content] Publicacion guardada');
   });
 
-  return { ...copy, hashtags: hashtagsBase };
+  return { ...copy, hashtags: hashtagsDB };
 }
