@@ -73,7 +73,7 @@ export default function AdminPage() {
        while (true) {
          const { done, value } = await reader.read();
          if (done) break;
-         fullText += decoder.decode(value);
+         fullText += decoder.decode(value, { stream: true });
          setMessages(prev => {
            const updated = [...prev];
            updated[updated.length - 1] = { role: 'assistant', content: fullText };
