@@ -143,7 +143,7 @@ export async function POST(req: Request) {
      method: 'POST',
      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
      body: JSON.stringify({
-       model: 'meta/llama-3.3-70b-instruct',
+       model: 'meta/llama-3.1-8b-instruct',
        messages,
        tools: [
          { type: 'function', function: { name: 'registrarCliente', description: 'Registra al cliente. Llama siempre primero.', parameters: { type: 'object', properties: { nombreCliente: { type: 'string' }, tipoLead: { type: 'string', enum: ['Venta','Captacion','Gestion'] } }, required: ['nombreCliente','tipoLead'] } } },
