@@ -97,20 +97,24 @@ Responde SOLO en este formato JSON exacto:
 
 export async function generarPublicacion(propiedad: PropiedadContent) {
   const supabase = getSupabase();
-  const hashtags = await obtenerHashtagsOptimos();
-  const copy = await generarCopyConNvidia(propiedad, hashtags);
+  
+  // Hashtags base siempre presentes — sin esperar a Supabase
+  const hashtagsBase = ['#TheEditMarbella', '#MarbellaRealEstate', '#LuxuryLiving', '#CostaDelSol', '#MarbellaDreams', '#LuxuryHomes', '#GoldenMile'];
+  
+  // Generar copy con NVIDIA
+  const copy = await generarCopyConNvidia(propiedad, hashtagsBase);
 
-  // Guardar en publicaciones
-  const { data, error } = await supabase.from('publicaciones').insert({
+  // Guardar async sin bloquear
+  supabase.from('publicaciones').insert({
     propiedad_slug: propiedad.slug,
     copy_instagram: copy.instagram,
     copy_linkedin: copy.linkedin,
-    hashtags,
+    hashtags: hashtagsBase,
     hook: copy.hook,
-  }).select().single();
+  }).then(({ error }) => {
+    if (error) console.error('[Content] Error guardando:', error.message);
+    else console.log('[Content] Publicacion guardada');
+  });
 
-  if (error) console.error('[Content] Error guardando publicación:', error.message);
-  else console.log('[Content] Publicación guardada — id:', data?.id);
-
-  return { ...copy, hashtags, id: data?.id };
+  return { ...copy, hashtags: hashtagsBase };
 }
