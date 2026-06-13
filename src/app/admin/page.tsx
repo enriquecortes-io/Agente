@@ -54,17 +54,36 @@ export default function AdminPage() {
  async function sendMessage() {
    if (!input.trim()) return;
    const userMsg = { role: 'user', content: input };
-   setMessages(prev => [...prev, userMsg]);
+   const newMessages = [...messages, userMsg];
+   setMessages(newMessages);
    setInput('');
    setLoading(true);
    try {
      const res = await fetch('/api/chat', {
        method: 'POST',
        headers: { 'Content-Type': 'application/json', 'x-agent-key': apiKey },
-       body: JSON.stringify({ messages: [...messages, userMsg] }),
+       body: JSON.stringify({ messages: newMessages }),
      });
-     const data = await res.json();
-     setMessages(prev => [...prev, { role: 'assistant', content: data.message || 'Sin respuesta' }]);
+     const contentType = res.headers.get('content-type') || '';
+     if (contentType.includes('text/plain')) {
+       const reader = res.body!.getReader();
+       const decoder = new TextDecoder();
+       let fullText = '';
+       setMessages(prev => [...prev, { role: 'assistant', content: '' }]);
+       while (true) {
+         const { done, value } = await reader.read();
+         if (done) break;
+         fullText += decoder.decode(value);
+         setMessages(prev => {
+           const updated = [...prev];
+           updated[updated.length - 1] = { role: 'assistant', content: fullText };
+           return updated;
+         });
+       }
+     } else {
+       const data = await res.json();
+       setMessages(prev => [...prev, { role: 'assistant', content: data.message || 'Sin respuesta' }]);
+     }
    } catch {
      setMessages(prev => [...prev, { role: 'assistant', content: 'Error de conexión.' }]);
    }
