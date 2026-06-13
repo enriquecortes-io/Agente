@@ -109,7 +109,7 @@ export async function generarPublicacion(propiedad: PropiedadContent) {
     propiedad_slug: propiedad.slug,
     copy_instagram: copy.instagram,
     copy_linkedin: copy.linkedin,
-    hashtags: hashtagsBase,
+    hashtags: hashtagsDB,
     hook: copy.hook,
   }).then(({ error }) => {
     if (error) console.error('[Content] Error guardando:', error.message);
