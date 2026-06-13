@@ -115,3 +115,70 @@ export async function analizarCompetencia(username: string, maxReels = 10): Prom
   const analisis = await analizarReelsConNvidia(reels, 'The Edit Marbella — agencia inmobiliaria de lujo en Marbella');
   return { reels, analisis };
 }
+
+import { createClient } from '@supabase/supabase-js';
+
+function getSupabase() {
+  return createClient(
+    process.env.SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY!
+  );
+}
+
+export async function guardarAnalisisCompetencia(username: string, reels: ReelAnalysis[], analisis: string) {
+  const supabase = getSupabase();
+
+  // Extraer hashtags del análisis
+  const hashtagMatches = analisis.match(/#\w+/g) || [];
+  const hashtags = [...new Set(hashtagMatches)];
+
+  const { error } = await supabase.from('competencia_analisis').insert({
+    username,
+    reels_analizados: reels.length,
+    analisis_raw: analisis,
+    hashtags: { lista: hashtags },
+  });
+
+  if (error) {
+    console.error('[Supabase] Error guardando análisis:', error.message);
+  } else {
+    console.log(`[Supabase] Análisis de @${username} guardado`);
+  }
+
+  // Extraer y guardar aprendizajes en marketing_conocimiento
+  const aprendizajes = [
+    ...hashtags.map(h => ({
+      categoria: 'hashtag',
+      contenido: h,
+      fuente: username,
+      veces_visto: 1,
+    })),
+  ];
+
+  for (const ap of aprendizajes) {
+    // Upsert — si ya existe el hashtag de ese competidor, incrementar veces_visto
+    const { data: existing } = await supabase
+      .from('marketing_conocimiento')
+      .select('id, veces_visto')
+      .eq('categoria', ap.categoria)
+      .eq('contenido', ap.contenido)
+      .limit(1);
+
+    if (existing?.length) {
+      await supabase
+        .from('marketing_conocimiento')
+        .update({ veces_visto: (existing[0].veces_visto || 1) + 1, updated_at: new Date().toISOString() })
+        .eq('id', existing[0].id);
+    } else {
+      await supabase.from('marketing_conocimiento').insert(ap);
+    }
+  }
+
+  console.log(`[Supabase] ${aprendizajes.length} aprendizajes actualizados`);
+}
+
+export async function analizarYGuardar(username: string, maxReels = 10) {
+  const { reels, analisis } = await analizarCompetencia(username, maxReels);
+  await guardarAnalisisCompetencia(username, reels, analisis);
+  return { reels, analisis };
+}
