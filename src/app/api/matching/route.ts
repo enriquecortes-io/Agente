@@ -69,7 +69,7 @@ export async function POST(req: Request) {
                  <td style="padding: 12px 0; color: #c8a96a; font-size: 12px;">Score: ${l.score}</td>
                </tr>`).join('')}
            </table>
-           ${propiedad.slug ? `<br><a href="https://mdlm-xi.vercel.app/es/propiedades/${propiedad.slug}" style="display: inline-block; background: #c8a96a; color: #0a0a0a; padding: 12px 32px; text-decoration: none; font-size: 12px; letter-spacing: 2px; text-transform: uppercase; border-radius: 2px; margin-top: 24px;">Ver propiedad</a>` : ''}
+           ${propiedad.slug ? `<br><a href="https://www.theeditmarbella.com/es/propiedades/${propiedad.slug}" style="display: inline-block; background: #c8a96a; color: #0a0a0a; padding: 12px 32px; text-decoration: none; font-size: 12px; letter-spacing: 2px; text-transform: uppercase; border-radius: 2px; margin-top: 24px;">Ver propiedad</a>` : ''}
            <p style="color: #3a3a3a; font-size: 11px; text-align: center; margin-top: 40px;">Harvis Real Estate Intelligence · Marbella</p>
          </div>
        `,
@@ -91,7 +91,7 @@ export async function POST(req: Request) {
              Estimado ${lead.name},<br><br>
              Acabamos de incorporar una nueva propiedad a nuestra selección que se ajusta a su perfil de búsqueda. Dada su exclusividad, nos ha parecido oportuno informarle antes de que esté disponible públicamente.
            </p>
-           ${propiedad.slug ? `<a href="https://mdlm-xi.vercel.app/es/propiedades/${propiedad.slug}" style="display: inline-block; background: #c8a96a; color: #0a0a0a; padding: 14px 36px; text-decoration: none; font-size: 12px; letter-spacing: 2px; text-transform: uppercase; border-radius: 2px;">Ver propiedad</a>` : ''}
+           ${propiedad.slug ? `<a href="https://www.theeditmarbella.com/es/propiedades/${propiedad.slug}" style="display: inline-block; background: #c8a96a; color: #0a0a0a; padding: 14px 36px; text-decoration: none; font-size: 12px; letter-spacing: 2px; text-transform: uppercase; border-radius: 2px;">Ver propiedad</a>` : ''}
            <p style="color: #8a7a6a; font-size: 13px; margin-top: 40px;">Para concertar una visita privada, simplemente responda a este email.</p>
            <p style="color: #3a3a3a; font-size: 11px; text-align: center; margin-top: 40px;">Harvis Real Estate Intelligence · Marbella</p>
          </div>

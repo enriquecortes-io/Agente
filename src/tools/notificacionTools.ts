@@ -65,7 +65,7 @@ export async function notificarEnrique(lead: LeadNotificacion) {
          </div>
 
          <div style="text-align: center;">
-           <a href="https://mdlm-xi.vercel.app/es/admin" style="display: inline-block; background: #c8a96a; color: #0a0a0a; padding: 12px 32px; text-decoration: none; font-size: 12px; letter-spacing: 2px; text-transform: uppercase; border-radius: 2px;">Ver en CRM</a>
+           <a href="https://harvis-six.vercel.app/admin" style="display: inline-block; background: #c8a96a; color: #0a0a0a; padding: 12px 32px; text-decoration: none; font-size: 12px; letter-spacing: 2px; text-transform: uppercase; border-radius: 2px;">Ver en CRM</a>
          </div>
 
          <p style="color: #3a3a3a; font-size: 11px; text-align: center; margin-top: 32px;">

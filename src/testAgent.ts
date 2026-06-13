@@ -242,7 +242,7 @@ async function testCalendar() {
     nombreCliente: 'James Wilson',
     emailCliente: 'enriquecortesgomez@gmail.com',
     propiedadTitulo: 'Villa Golden Mile',
-    propiedadUrl: 'https://mdlm-xi.vercel.app/es/propiedades/villa-golden-mile',
+    propiedadUrl: 'https://www.theeditmarbella.com/es/propiedades/villa-golden-mile',
     fecha: '2026-06-10',
     hora: '11:00',
     notas: 'Cliente relocalización desde Londres. Presupuesto 8M.',

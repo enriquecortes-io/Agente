@@ -95,7 +95,7 @@ export async function enviarSeguimiento(lead: LeadFollowup) {
       <p style="color: #c8b89a; font-size: 15px; line-height: 1.7; margin-bottom: 32px;">
         Tenemos nuevas oportunidades exclusivas que podrían interesarle, incluyendo propiedades off-market que no aparecen públicamente.
       </p>
-      <a href="https://mdlm-xi.vercel.app" style="display: inline-block; background: #c8a96a; color: #0a0a0a; padding: 14px 36px; text-decoration: none; font-size: 12px; letter-spacing: 2px; text-transform: uppercase; border-radius: 2px;">Ver propiedades</a>
+      <a href="https://www.theeditmarbella.com" style="display: inline-block; background: #c8a96a; color: #0a0a0a; padding: 14px 36px; text-decoration: none; font-size: 12px; letter-spacing: 2px; text-transform: uppercase; border-radius: 2px;">Ver propiedades</a>
       <p style="color: #8a7a6a; font-size: 13px; margin-top: 40px; line-height: 1.6;">
         Si prefiere una conversación personal, simplemente responda a este email y le contactaremos en menos de 24 horas.
       </p>
