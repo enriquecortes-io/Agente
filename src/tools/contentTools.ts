@@ -37,7 +37,7 @@ async function obtenerHashtagsOptimos(): Promise<string[]> {
   return todos.slice(0, 8); // máximo 8 para el algoritmo
 }
 
-async function generarCopyConNvidia(propiedad: PropiedadContent, hashtags: string[]): Promise<{ instagram: string; linkedin: string; hook: string }> {
+export async function generarCopyConNvidia(propiedad: PropiedadContent, hashtags: string[]): Promise<{ instagram: string; linkedin: string; hook: string }> {
   const nvidiaKey = process.env.NVIDIA_API_KEY;
   if (!nvidiaKey) throw new Error('Falta NVIDIA_API_KEY');
 
