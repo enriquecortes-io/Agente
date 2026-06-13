@@ -12,7 +12,7 @@ if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-const BASE_URL = process.env.THEEDIT_BASE_URL || 'https://mdlm-xi.vercel.app';
+const BASE_URL = process.env.THEEDIT_BASE_URL || 'https://www.theeditmarbella.com';
 
 interface SearchArgs {
   urbanizacion?: string;
