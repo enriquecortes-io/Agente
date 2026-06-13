@@ -142,7 +142,7 @@ export async function POST(req: Request) {
           { role: 'system', content: SYSTEM_PROMPT },
           ...incomingMessages.map((m: any) => ({ role: m.role, content: m.content })),
         ],
-        max_tokens: 600,
+        max_tokens: 400,
         temperature: 0.4,
         stream: true,
       }),
