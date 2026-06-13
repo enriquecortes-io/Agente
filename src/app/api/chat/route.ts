@@ -63,6 +63,7 @@ export async function POST(req: Request) {
 
   const requestId = crypto.randomUUID().slice(0, 8);
   const ultimoMensaje = incomingMessages[incomingMessages.length - 1]?.content || '';
+  const todosLosMensajes = incomingMessages.map((m: any) => m.content).join('\n');
 
   // Detectar tipo de lead
   const esVendedorCrm = /quiero vender|vendo|vender mi|tengo.*(?:piso|villa|casa|apartamento|finca|propiedad).*(?:vender|venta)|busco comprador|como funcionais|cómo funcionáis|servicio.*venta|vender.*propiedad/i.test(ultimoMensaje);
@@ -70,7 +71,7 @@ export async function POST(req: Request) {
   const esCaptacion = esVendedorCrm;
 
   // Detectar contacto
-  const contacto = detectarContacto(ultimoMensaje);
+  const contacto = detectarContacto(todosLosMensajes);
   const zonaCrm = ZONAS_COSTA_DEL_SOL.find(z => ultimoMensaje.toLowerCase().includes(z.toLowerCase())) || undefined;
 
   // Insertar lead fire-and-forget
