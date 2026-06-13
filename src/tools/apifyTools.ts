@@ -18,16 +18,15 @@ export async function scrapeInstagramReels(username: string, maxReels = 10): Pro
 
   console.log(`[Apify] Scraping reels de @${username}...`);
 
+  const esUrl = username.startsWith('http');
+  const payload = esUrl
+    ? { directUrls: [username], resultsType: 'posts', resultsLimit: maxReels }
+    : { directUrls: [`https://www.instagram.com/${username}/`], resultsType: 'posts', resultsLimit: maxReels, searchType: 'user', searchLimit: maxReels };
+
   const runRes = await fetch('https://api.apify.com/v2/acts/apify~instagram-scraper/runs', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-    body: JSON.stringify({
-      directUrls: [`https://www.instagram.com/${username}/`],
-      resultsType: 'posts',
-      resultsLimit: maxReels,
-      searchType: 'user',
-      searchLimit: maxReels,
-    }),
+    body: JSON.stringify(payload),
   });
 
   if (!runRes.ok) throw new Error(`Apify error: ${runRes.status}`);
