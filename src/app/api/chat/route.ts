@@ -137,7 +137,7 @@ export async function POST(req: Request) {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'meta/llama-3.3-70b-instruct',
+        model: 'meta/llama-3.1-8b-instruct',
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
           ...incomingMessages.map((m: any) => ({ role: m.role, content: m.content })),
