@@ -218,6 +218,7 @@ async function main() {
     else if (arg === 'nda')       { await testNDA(); }
     else if (arg === 'geo')       { await testGeocoding(); }
     else if (arg === 'apify')     { await testApify(); }
+    else if (arg === 'content')   { await testContent(); }
     else {
       await testSupabase();
       await testDrive();
@@ -278,4 +279,22 @@ async function testApify() {
   console.log(`\n📊 ${reels.length} reels analizados\n`);
   console.log('─'.repeat(60));
   console.log(analisis);
+}
+
+async function testContent() {
+  header('Content — Generar publicación optimizada');
+  const { generarPublicacion } = await import('./tools/contentTools.js');
+  const result = await generarPublicacion({
+    titulo: 'Villa Golden Mile',
+    precio: 4500000,
+    zona: 'Golden Mile, Marbella',
+    habitaciones: 6,
+    m2: 850,
+    slug: 'villa-golden-mile',
+    descripcion: 'Villa de lujo con vistas panorámicas al mar, piscina infinita y jardines tropicales',
+  });
+  console.log('\nHOOK:', result.hook);
+  console.log('\nINSTAGRAM:\n', result.instagram);
+  console.log('\nLINKEDIN:\n', result.linkedin);
+  console.log('\nHASHTAGS:', result.hashtags?.join(' '));
 }
