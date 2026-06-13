@@ -25,7 +25,7 @@ export default function AdminPage() {
  const [competidorUsername, setCompetidorUsername] = useState('');
  const [analizando, setAnalizando] = useState(false);
 
- const apiKey = process.env.NEXT_PUBLIC_AGENT_KEY || '';
+ const apiKey = 'dda3fb2a36a29de06fa337e5a72b29638a12a0afea647e8fd14af556d76f0e1d';
 
  useEffect(() => {
    if (activeTab === 'Leads') fetchLeads();
