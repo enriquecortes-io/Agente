@@ -98,11 +98,11 @@ Responde SOLO en este formato JSON exacto:
 export async function generarPublicacion(propiedad: PropiedadContent) {
   const supabase = getSupabase();
   
-  // Obtener hashtags de la base de conocimiento acumulada
-  const hashtagsDB = await obtenerHashtagsOptimos();
-  
-  // Generar copy con NVIDIA
-  const copy = await generarCopyConNvidia(propiedad, hashtagsDB);
+  // Ejecutar en paralelo — hashtags de BD y copy de NVIDIA
+  const [hashtagsDB, copy] = await Promise.all([
+    obtenerHashtagsOptimos(),
+    generarCopyConNvidia(propiedad, ['#TheEditMarbella','#MarbellaRealEstate','#LuxuryLiving','#CostaDelSol','#Marbella','#LuxuryRealEstate','#PropiedadesDeLujo','#ElMadroñal']),
+  ]);
 
   // Guardar async sin bloquear
   supabase.from('publicaciones').insert({
