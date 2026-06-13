@@ -112,7 +112,7 @@ export default function AdminPage() {
    header: { borderBottom: `1px solid ${BORDER}`, padding: '20px 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' },
    logo: { fontSize: '11px', letterSpacing: '4px', textTransform: 'uppercase' as const, color: ACCENT },
    nav: { display: 'flex', gap: '0' },
-   tab: (active: boolean) => ({ padding: '20px 24px', fontSize: '11px', letterSpacing: '2px', textTransform: 'uppercase' as const, cursor: 'pointer', borderBottom: active ? `2px solid ${ACCENT}` : '2px solid transparent', color: active ? ACCENT : MUTED, background: 'none', border: 'none', borderBottom: active ? `2px solid ${ACCENT}` : '2px solid transparent' }),
+   tab: (active: boolean) => ({ padding: '20px 24px', fontSize: '11px', letterSpacing: '2px', textTransform: 'uppercase' as const, cursor: 'pointer', color: active ? ACCENT : MUTED, background: 'none', border: 'none', borderBottom: active ? `2px solid ${ACCENT}` : '2px solid transparent' }),
    content: { padding: '32px' },
    card: { background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: '4px', padding: '24px', marginBottom: '16px' },
    label: { fontSize: '10px', letterSpacing: '2px', textTransform: 'uppercase' as const, color: MUTED, marginBottom: '8px', display: 'block' },
