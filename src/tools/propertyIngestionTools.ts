@@ -170,7 +170,7 @@ async function subirImagenesDrive(imagenes: string[], nombrePropiedad: string): 
         requestBody: { role: 'reader', type: 'anyone' },
       });
 
-      const publicUrl = `https://drive.google.com/uc?export=view&id=${file.data.id}`;
+      const publicUrl = `/api/drive?id=${file.data.id}`;
       urls.push(publicUrl);
       console.log(`[Ingestion] Imagen ${i + 1}/${Math.min(imagenes.length, 30)} subida`);
     } catch (e: any) {
