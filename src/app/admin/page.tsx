@@ -37,6 +37,9 @@ export default function AdminPage() {
  const [competencia, setCompetencia] = useState<any[]>([]);
  const [publicaciones, setPublicaciones] = useState<any[]>([]);
  const [propForm, setPropForm] = useState({ titulo: '', precio: '', zona: '', habitaciones: '', m2: '', slug: '', descripcion: '' });
+  const [ingestUrl, setIngestUrl] = useState('');
+  const [ingestando, setIngestando] = useState(false);
+  const [ingestResult, setIngestResult] = useState<any>(null);
  const [generando, setGenerando] = useState(false);
  const [copyResult, setCopyResult] = useState<any>(null);
  const [competidorUsername, setCompetidorUsername] = useState('');
@@ -333,7 +336,24 @@ export default function AdminPage() {
        {activeTab === 'Publicaciones' && (
          <div>
            <div style={{ ...s.card, marginBottom: '24px' }}>
-             <div style={{ fontSize: '16px', fontWeight: '600', marginBottom: '16px' }}>Generar publicación</div>
+             <div style={{ fontSize: '16px', fontWeight: '600', marginBottom: '12px' }}>🔗 Ingerir propiedad desde URL</div>
+             <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+               <input style={{ ...s.input, flex: 1 }} value={ingestUrl} onChange={e => setIngestUrl(e.target.value)} placeholder='https://solvilla.es/...' />
+               <button style={s.btn} onClick={ingerirDesdeUrl} disabled={ingestando}>{ingestando ? 'Procesando...' : '⚡ Ingerir'}</button>
+             </div>
+             {ingestResult && (
+               <div style={{ background: ingestResult.error ? '#fef2f2' : '#f0fdf4', border: '1px solid ' + (ingestResult.error ? '#fecaca' : '#bbf7d0'), borderRadius: '10px', padding: '16px', marginBottom: '16px' }}>
+                 {ingestResult.error
+                   ? <div style={{ color: '#ef4444', fontSize: '14px' }}>❌ {ingestResult.error}</div>
+                   : <div>
+                       <div style={{ color: '#10b981', fontWeight: '600', marginBottom: '8px' }}>✅ Publicada en The Edit Marbella</div>
+                       <div style={{ fontSize: '13px', color: '#6b7280', marginBottom: '8px' }}>{ingestResult.galeriaUrls?.length} imágenes subidas a Drive</div>
+                       <div style={{ fontSize: '13px', lineHeight: '1.6', background: '#fff', padding: '12px', borderRadius: '8px' }}>{ingestResult.copyReel}</div>
+                     </div>
+                 }
+               </div>
+             )}
+             <div style={{ fontSize: '16px', fontWeight: '600', marginBottom: '16px' }}>✍️ Generar publicación manual</div>
              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                {[['titulo','Título'],['precio','Precio (€)'],['zona','Zona'],['habitaciones','Habitaciones'],['m2','m²'],['slug','Slug URL']].map(([key, label]) => (
                  <div key={key}>
