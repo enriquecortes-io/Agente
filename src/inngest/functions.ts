@@ -2,13 +2,13 @@ import { inngest } from './client.js';
 import { ingerirPropiedad } from '../tools/propertyIngestionTools.js';
 
 export const ingestProperty = inngest.createFunction(
-  { id: 'ingest-property', timeout: '10m' },
-  { event: 'property/ingest' },
-  async ({ event, step }) => {
-    const { url, slug } = event.data;
-    const result = await step.run('ingerir-propiedad', async () => {
-      return await ingerirPropiedad(url, slug);
-    });
-    return result;
-  }
+ { id: 'ingest-property' },
+ { event: 'property/ingest' },
+ async ({ event, step }) => {
+   const { url, slug } = event.data;
+   const result = await step.run('ingerir-propiedad', async () => {
+     return await ingerirPropiedad(url, slug);
+   });
+   return result;
+ }
 );
