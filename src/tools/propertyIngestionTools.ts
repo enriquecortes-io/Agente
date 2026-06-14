@@ -7,13 +7,19 @@ function getSupabase() {
   return createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
-function getDriveService() {
-  const auth = new google.auth.OAuth2(
-    process.env.GOOGLE_OAUTH_CLIENT_ID,
-    process.env.GOOGLE_OAUTH_CLIENT_SECRET,
-  );
-  auth.setCredentials({ refresh_token: process.env.GOOGLE_OAUTH_REFRESH_TOKEN });
-  return google.drive({ version: 'v3', auth });
+async function getDriveService() {
+ const supabase = getSupabase();
+ const { data } = await supabase.from('oauth_tokens').select('refresh_token').eq('id', 'google_drive').single();
+ const refreshToken = data?.refresh_token || process.env.GOOGLE_OAUTH_REFRESH_TOKEN;
+ const auth = new google.auth.OAuth2(process.env.GOOGLE_OAUTH_CLIENT_ID, process.env.GOOGLE_OAUTH_CLIENT_SECRET);
+ auth.setCredentials({ refresh_token: refreshToken });
+ auth.on('tokens', async (tokens) => {
+   if (tokens.refresh_token) {
+     await supabase.from('oauth_tokens').upsert({ id: 'google_drive', refresh_token: tokens.refresh_token, updated_at: new Date().toISOString() });
+     console.log('[Drive] Refresh token actualizado en Supabase');
+   }
+ });
+ return google.drive({ version: 'v3', auth });
 }
 
 // 1. EXTRAER DATOS DE LA WEB
@@ -129,7 +135,7 @@ Responde SOLO en JSON:
 
 // 3. SUBIR IMÁGENES A DRIVE Y OBTENER URLS PÚBLICAS
 async function subirImagenesDrive(imagenes: string[], nombrePropiedad: string): Promise<string[]> {
-  const drive = getDriveService();
+  const drive = await getDriveService();
   const parentFolderId = process.env.GOOGLE_FOLDER_IMAGENES!;
   console.log("[Drive] parentFolderId:", parentFolderId);
 
