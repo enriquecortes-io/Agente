@@ -124,7 +124,24 @@ export default function AdminPage() {
    recognition.start();
  }
 
- async function generarPublicacion() {
+ async function ingerirDesdeUrl() {
+  setIngestando(true);
+  setIngestResult(null);
+  try {
+    const res = await fetch('/api/ingest', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: ingestUrl }),
+    });
+    const data = await res.json();
+    setIngestResult(data);
+  } catch {
+    setIngestResult({ error: 'Error en la ingesta' });
+  }
+  setIngestando(false);
+}
+
+async function generarPublicacion() {
    setGenerando(true);
    setCopyResult(null);
    try {
