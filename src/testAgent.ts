@@ -311,3 +311,12 @@ async function testImageScraper() {
   const result = await extraerImagenesDeWeb(url, nombre);
   console.log(JSON.stringify(result, null, 2));
 }
+
+async function testIngestion() {
+  header('Property Ingestion — URL → Drive → Supabase → Reel');
+  const { ingerirPropiedad } = await import('./tools/propertyIngestionTools.js');
+  const url = process.argv[3] || 'https://www.theeditmarbella.com/es/propiedades/villa-anabel';
+  console.log(`\nIngiriendo: ${url}\n`);
+  const result = await ingerirPropiedad(url);
+  console.log(JSON.stringify(result, null, 2));
+}
