@@ -237,25 +237,13 @@ export async function ingerirPropiedad(url: string, slug?: string): Promise<{
     // 4. Insertar en Supabase
     const propiedad = await insertarPropiedad(datos, descripcion, galeriaUrls, slugFinal);
 
-    // 5. Generar copy del reel
-    const { generarCopyConNvidia } = await import('./contentTools.js');
-    const copy = await generarCopyConNvidia({
-      titulo: datos.titulo,
-      precio: datos.precio,
-      zona: '',
-      habitaciones: datos.habitaciones,
-      m2: datos.m2,
-      slug: slugFinal,
-      descripcion: descripcion.en,
-    }, ['#TheEditMarbella', '#MarbellaRealEstate', '#LuxuryLiving', '#CostaDelSol']);
-
     console.log(`[Ingestion] ✅ Flujo completado para ${datos.titulo}`);
 
     return {
       success: true,
       propiedadId: propiedad.id,
       galeriaUrls,
-      copyReel: copy.instagram,
+      copyReel: null,
     };
 
   } catch (error: any) {
