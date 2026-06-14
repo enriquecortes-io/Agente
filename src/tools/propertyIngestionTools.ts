@@ -136,7 +136,7 @@ Responde SOLO en JSON:
 // 3. SUBIR IMÁGENES A DRIVE Y OBTENER URLS PÚBLICAS
 async function subirImagenesDrive(imagenes: string[], nombrePropiedad: string): Promise<string[]> {
   const drive = await getDriveService();
-  const parentFolderId = process.env.GOOGLE_FOLDER_IMAGENES!;
+  const parentFolderId = process.env.GOOGLE_FOLDER_IMAGENES || "1ao8-TxyWx3mzD3YWvo0gDkODitJcWeYq";
   console.log("[Drive] parentFolderId:", parentFolderId);
 
   // Crear subcarpeta
