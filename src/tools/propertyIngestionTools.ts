@@ -243,7 +243,7 @@ export async function ingerirPropiedad(url: string, slug?: string): Promise<{
       success: true,
       propiedadId: propiedad.id,
       galeriaUrls,
-      copyReel: null,
+      copyReel: undefined,
     };
 
   } catch (error: any) {
