@@ -220,6 +220,7 @@ async function main() {
     else if (arg === 'apify')     { await testApify(); }
     else if (arg === 'content')   { await testContent(); }
     else if (arg === 'scraper')   { await testImageScraper(); }
+    else if (arg === 'ingest')    { await testIngestion(); }
     else {
       await testSupabase();
       await testDrive();
