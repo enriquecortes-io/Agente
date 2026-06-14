@@ -219,6 +219,7 @@ async function main() {
     else if (arg === 'geo')       { await testGeocoding(); }
     else if (arg === 'apify')     { await testApify(); }
     else if (arg === 'content')   { await testContent(); }
+    else if (arg === 'scraper')   { await testImageScraper(); }
     else {
       await testSupabase();
       await testDrive();
@@ -298,4 +299,14 @@ async function testContent() {
   console.log('\nINSTAGRAM:\n', result.instagram);
   console.log('\nLINKEDIN:\n', result.linkedin);
   console.log('\nHASHTAGS:', result.hashtags?.join(' '));
+}
+
+async function testImageScraper() {
+  header('Image Scraper — Extraer imágenes a Drive');
+  const { extraerImagenesDeWeb } = await import('./tools/imageScraperTools.js');
+  const url = process.argv[3] || 'https://www.theeditmarbella.com/es/propiedades/villa-anabel';
+  const nombre = process.argv[4] || 'Villa Anabel';
+  console.log(`\nExtrayendo imágenes de: ${url}\n`);
+  const result = await extraerImagenesDeWeb(url, nombre);
+  console.log(JSON.stringify(result, null, 2));
 }
