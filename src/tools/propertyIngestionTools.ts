@@ -131,6 +131,7 @@ Responde SOLO en JSON:
 async function subirImagenesDrive(imagenes: string[], nombrePropiedad: string): Promise<string[]> {
   const drive = getDriveService();
   const parentFolderId = process.env.GOOGLE_FOLDER_IMAGENES!;
+  console.log("[Drive] parentFolderId:", parentFolderId);
 
   // Crear subcarpeta
   const folder = await drive.files.create({
