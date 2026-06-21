@@ -32,7 +32,7 @@ export async function extraerDatosPropiedad(url: string) {
   const html = await res.text();
   const urlBase = new URL(url);
 
-  // Extraer imágenes
+  // Extraer imágenes — formato clásico (src/data-src/srcset con extensión)
   const imageSet = new Set<string>();
   const srcMatches = html.matchAll(/(?:src|data-src|data-lazy)=["']([^"']+\.(jpg|jpeg|png|webp|avif)[^"']*)/gi);
   for (const m of srcMatches) {
@@ -49,6 +49,16 @@ export async function extraerDatosPropiedad(url: string) {
       }
     });
   }
+
+  // Extraer imágenes de CDNs sin extensión en la URL (Uploadcare, Imgix, Cloudinary, etc.)
+  // Patrón: dominio-cdn.com/{uuid}/ con transformaciones tipo /-/format/webp/
+  const cdnMatches = html.matchAll(/https:\/\/(?:uploadcare\.[a-z.]+|[\w-]+\.cloudinary\.com|[\w-]+\.imgix\.net)\/[a-f0-9-]{36}\/[^"'\s)]*/gi);
+  for (const m of cdnMatches) {
+    // Normalizar a la versión de mayor calidad/resolución disponible
+    const base = m[0].split('/-/')[0];
+    imageSet.add(`${base}/-/format/jpeg/-/resize/2000x/-/quality/best/`);
+  }
+
   const imagenes = Array.from(imageSet).filter(u =>
     !u.includes('icon') && !u.includes('logo') && !u.includes('favicon') &&
     !u.includes('avatar') && !u.includes('spinner') && u.length > 20
