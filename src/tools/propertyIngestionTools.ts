@@ -7,19 +7,22 @@ function getSupabase() {
   return createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
-async function getDriveService() {
- const supabase = getSupabase();
- const { data } = await supabase.from('oauth_tokens').select('refresh_token').eq('id', 'google_drive').single();
- const refreshToken = data?.refresh_token || process.env.GOOGLE_OAUTH_REFRESH_TOKEN;
- const auth = new google.auth.OAuth2(process.env.GOOGLE_OAUTH_CLIENT_ID, process.env.GOOGLE_OAUTH_CLIENT_SECRET);
- auth.setCredentials({ refresh_token: refreshToken });
- auth.on('tokens', async (tokens) => {
-   if (tokens.refresh_token) {
-     await supabase.from('oauth_tokens').upsert({ id: 'google_drive', refresh_token: tokens.refresh_token, updated_at: new Date().toISOString() });
-     console.log('[Drive] Refresh token actualizado en Supabase');
-   }
- });
- return google.drive({ version: 'v3', auth });
+function getDriveService() {
+  const auth = new google.auth.GoogleAuth({
+    projectId: 'harvis-496912',
+    credentials: {
+      type: 'service_account',
+      project_id: 'harvis-496912',
+      private_key_id: '',
+      private_key: process.env.GOOGLE_PRIVATE_KEY,
+      client_email: process.env.GOOGLE_CLIENT_EMAIL,
+      client_id: process.env.GOOGLE_CLIENT_ID,
+      auth_uri: 'https://accounts.google.com/o/oauth2/auth',
+      token_uri: 'https://oauth2.googleapis.com/token',
+    },
+    scopes: ['https://www.googleapis.com/auth/drive'],
+  });
+  return google.drive({ version: 'v3', auth });
 }
 
 // 1. EXTRAER DATOS DE LA WEB
@@ -145,7 +148,7 @@ Responde SOLO en JSON:
 
 // 3. SUBIR IMÁGENES A DRIVE Y OBTENER URLS PÚBLICAS
 async function subirImagenesDrive(imagenes: string[], nombrePropiedad: string): Promise<string[]> {
-  const drive = await getDriveService();
+    const drive = getDriveService();
   const parentFolderId = process.env.GOOGLE_FOLDER_IMAGENES || "1ao8-TxyWx3mzD3YWvo0gDkODitJcWeYq";
   console.log("[Drive] parentFolderId:", parentFolderId);
 
