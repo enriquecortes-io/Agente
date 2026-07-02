@@ -13,13 +13,10 @@ function getDriveService() {
     credentials: {
       type: 'service_account',
       project_id: 'harvis-496912',
-      private_key_id: '',
       private_key: process.env.GOOGLE_PRIVATE_KEY,
       client_email: process.env.GOOGLE_CLIENT_EMAIL,
       client_id: process.env.GOOGLE_CLIENT_ID,
-      auth_uri: 'https://accounts.google.com/o/oauth2/auth',
-      token_uri: 'https://oauth2.googleapis.com/token',
-    },
+    } as any,
     scopes: ['https://www.googleapis.com/auth/drive'],
   });
   return google.drive({ version: 'v3', auth });
