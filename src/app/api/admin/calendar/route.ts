@@ -18,25 +18,41 @@ export async function GET() {
     const calendar = getCalendarService();
     const calendarId = 'enriquecortesgomez@gmail.com';
 
-    // Lunes de esta semana
-    const hoy = new Date();
-    const diaSemana = hoy.getDay() === 0 ? 6 : hoy.getDay() - 1;
-    const lunes = new Date(hoy);
-    lunes.setDate(hoy.getDate() - diaSemana);
-    lunes.setHours(0, 0, 0, 0);
+    // Lunes de esta semana en Madrid (UTC+2)
+    const ahora = new Date();
+    const offsetMadrid = 2 * 60; // minutos
+    const ahoraMadrid = new Date(ahora.getTime() + offsetMadrid * 60 * 1000);
+
+    const diaSemana = ahoraMadrid.getUTCDay() === 0 ? 6 : ahoraMadrid.getUTCDay() - 1;
+    const lunes = new Date(ahoraMadrid);
+    lunes.setUTCDate(ahoraMadrid.getUTCDate() - diaSemana);
+    lunes.setUTCHours(0, 0, 0, 0);
 
     const domingo = new Date(lunes);
-    domingo.setDate(lunes.getDate() + 6);
-    domingo.setHours(23, 59, 59, 999);
+    domingo.setUTCDate(lunes.getUTCDate() + 6);
+    domingo.setUTCHours(23, 59, 59, 999);
+
+    // Convertir de vuelta a UTC real para la API
+    const timeMin = new Date(lunes.getTime() - offsetMadrid * 60 * 1000).toISOString();
+    const timeMax = new Date(domingo.getTime() - offsetMadrid * 60 * 1000).toISOString();
+
+    console.log(`[Calendar] Buscando eventos: ${timeMin} → ${timeMax}`);
+    console.log(`[Calendar] CalendarId: ${calendarId}`);
+
+    // Primero listar calendarios disponibles para el service account
+    const calList = await calendar.calendarList.list();
+    console.log(`[Calendar] Calendarios accesibles:`, calList.data.items?.map(c => c.id));
 
     const res = await calendar.events.list({
       calendarId,
-      timeMin: lunes.toISOString(),
-      timeMax: domingo.toISOString(),
+      timeMin,
+      timeMax,
       singleEvents: true,
       orderBy: 'startTime',
       maxResults: 50,
     });
+
+    console.log(`[Calendar] Eventos encontrados: ${res.data.items?.length || 0}`);
 
     const eventos = (res.data.items || []).map(e => ({
       id: e.id,
@@ -48,9 +64,14 @@ export async function GET() {
       link: e.htmlLink,
     }));
 
-    return Response.json({ eventos, semanaInicio: lunes.toISOString() });
+    return Response.json({
+      eventos,
+      semanaInicio: new Date(lunes.getTime() - offsetMadrid * 60 * 1000).toISOString(),
+      debug: { timeMin, timeMax, totalEventos: eventos.length }
+    });
+
   } catch (error: any) {
     console.error('[Calendar] Error:', error.message);
-    return Response.json({ error: error.message }, { status: 500 });
+    return Response.json({ error: error.message, stack: error.stack?.slice(0, 500) }, { status: 500 });
   }
 }
