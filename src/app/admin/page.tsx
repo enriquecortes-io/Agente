@@ -15,6 +15,7 @@ const tabs = [
  { id: 'Leads', icon: '📋' },
  { id: 'Competencia', icon: '📊' },
  { id: 'Publicaciones', icon: '📝' },
+ { id: 'Campañas', icon: '📧' },
  { id: 'Conversaciones', icon: '🗂' },
  { id: 'Métricas', icon: '📈' },
 ];
@@ -30,6 +31,9 @@ const apiKey = 'dda3fb2a36a29de06fa337e5a72b29638a12a0afea647e8fd14af556d76f0e1d
 
 export default function AdminPage() {
  const [activeTab, setActiveTab] = useState('Chat');
+  const [emailLeads, setEmailLeads] = useState<any[]>([]);
+  const [campaignFilter, setCampaignFilter] = useState('todos');
+  const [campaignLoading, setCampaignLoading] = useState(false);
  const [messages, setMessages] = useState<{role: string, content: string}[]>([]);
  const [input, setInput] = useState('');
  const [loading, setLoading] = useState(false);
@@ -53,6 +57,7 @@ export default function AdminPage() {
    if (activeTab === 'Leads') fetchLeads();
    if (activeTab === 'Competencia') fetchCompetencia();
    if (activeTab === 'Publicaciones') fetchPublicaciones();
+  if (activeTab === 'Campañas') fetchEmailLeads();
  }, [activeTab]);
 
  async function fetchEmailLeads() {
@@ -458,7 +463,39 @@ async function generarPublicacion() {
        )}
 
        {/* CONVERSACIONES */}
-       {activeTab === 'Conversaciones' && (
+       
+      {activeTab === 'Campañas' && (
+        <div>
+          <div style={{ fontSize: '16px', fontWeight: '600', marginBottom: '16px' }}>📧 Campañas de Email</div>
+          <div style={{ display: 'flex', gap: '12px', marginBottom: '20px' }}>
+            <select value={campaignFilter} onChange={e => setCampaignFilter(e.target.value)} style={{ ...s.input, flex: 0.3 }}>
+              <option value='todos'>Todos ({emailLeads.length})</option>
+              <option value='pendiente'>Pendientes ({emailLeads.filter(l => l.estado === 'pendiente').length})</option>
+              <option value='enviado'>Enviados ({emailLeads.filter(l => l.estado === 'enviado').length})</option>
+              <option value='bounced'>Bounced ({emailLeads.filter(l => l.estado === 'bounced').length})</option>
+            </select>
+            <button style={s.btn} onClick={enviarCampana} disabled={campaignLoading}>
+              {campaignLoading ? '📤 Enviando...' : '📤 Enviar Campaña'}
+            </button>
+          </div>
+          <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '10px', overflow: 'hidden' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 3fr 1fr 1fr', padding: '12px 16px', background: '#f9fafb', fontWeight: '600', fontSize: '12px', color: '#6b7280', borderBottom: '1px solid #e5e7eb' }}>
+              <div>NOMBRE</div><div>EMAIL</div><div>ESTADO</div><div>FECHA</div>
+            </div>
+            {emailLeads.filter(l => campaignFilter === 'todos' || l.estado === campaignFilter).map((lead, i) => (
+              <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 3fr 1fr 1fr', padding: '12px 16px', borderBottom: '1px solid #f3f4f6', fontSize: '13px', alignItems: 'center' }}>
+                <div>{lead.nombre || '—'}</div>
+                <div style={{ color: '#1a56db', wordBreak: 'break-all' }}>{lead.email}</div>
+                <div><span style={{ padding: '3px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: '500', background: lead.estado === 'enviado' ? '#d1fae5' : lead.estado === 'bounced' ? '#fee2e2' : '#fef3c7', color: lead.estado === 'enviado' ? '#065f46' : lead.estado === 'bounced' ? '#991b1b' : '#92400e' }}>{lead.estado}</span></div>
+                <div style={{ color: '#9ca3af', fontSize: '12px' }}>{lead.enviado_at ? new Date(lead.enviado_at).toLocaleDateString('es-ES') : '—'}</div>
+              </div>
+            ))}
+            {emailLeads.length === 0 && <div style={{ padding: '24px', textAlign: 'center', color: '#9ca3af', fontSize: '14px' }}>No hay contactos cargados aún</div>}
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'Conversaciones' && (
          <div style={{ textAlign: 'center', padding: '80px 0' }}>
            <div style={{ fontSize: '40px', marginBottom: '16px' }}>🗂️</div>
            <div style={{ fontSize: '18px', fontWeight: '600', marginBottom: '8px' }}>Próximamente</div>
