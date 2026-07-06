@@ -68,7 +68,7 @@ function extraerNombreCliente(texto: string): string | null {
 }
 
 // Parser de múltiples visitas en un solo mensaje
-function parsearVisitas(texto: string, project: string): Array<{nombreCliente:string, fecha:string, hora:string, emailCliente?:string, propiedadTitulo:string, project:string}> {
+function parsearVisitas(texto: string, project: 'tem'|'solena'): Array<{nombreCliente:string, fecha:string, hora:string, emailCliente?:string, propiedadTitulo:string, project:'tem'|'solena'|undefined}> {
   const visitas: any[] = [];
 
   // Detectar si hay múltiples eventos mencionados — dividir por "y", "otro", números
