@@ -120,7 +120,7 @@ export async function POST(req: Request) {
   try {
     // ── INTENT CALENDARIO ─────────────────────────────────────
     if (esIntentCalendario(ultimoMensaje)) {
-      const visitas = parsearVisitas(ultimoMensaje, project);
+      const visitas = parsearVisitas(ultimoMensaje, project as 'tem' | 'solena');
 
       if (visitas.length === 0) {
         return new Response(JSON.stringify({success:true, message:'Para agendar necesito la fecha y hora. ¿Cuándo sería la visita?', requestId}),
