@@ -1,16 +1,11 @@
 import { google } from 'googleapis';
 import { Resend } from 'resend';
-import dotenv from 'dotenv';
-dotenv.config({ path: '.env.local' });
 
 function getCalendarService() {
-  if (!process.env.GOOGLE_CLIENT_EMAIL || !process.env.GOOGLE_PRIVATE_KEY) {
-    throw new Error('[Calendar] Faltan credenciales de Google en .env.local');
-  }
   const auth = new google.auth.GoogleAuth({
     credentials: {
       client_email: process.env.GOOGLE_CLIENT_EMAIL,
-      private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+      private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
     },
     scopes: ['https://www.googleapis.com/auth/calendar'],
   });
@@ -26,76 +21,52 @@ export interface VisitaData {
   hora: string;
   duracionMinutos?: number;
   notas?: string;
+  project?: 'tem' | 'solena';
 }
 
 function generarICS(visita: VisitaData, duracion: number): string {
   const inicio = new Date(`${visita.fecha}T${visita.hora}:00`);
   const fin = new Date(inicio.getTime() + duracion * 60 * 1000);
-
-  const formatICS = (d: Date) =>
-    d.toISOString().replace(/[-:]/g, '').replace('.000Z', 'Z');
-
-  const uid = `harvis-${Date.now()}@theeditmarbella.com`;
-
+  const fmt = (d: Date) => d.toISOString().replace(/[-:]/g, '').replace('.000Z', 'Z');
   return [
-    'BEGIN:VCALENDAR',
-    'VERSION:2.0',
-    'PRODID:-//Harvis Real Estate//ES',
-    'CALSCALE:GREGORIAN',
-    'METHOD:REQUEST',
+    'BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Harvis//ES','CALSCALE:GREGORIAN','METHOD:REQUEST',
     'BEGIN:VEVENT',
-    `UID:${uid}`,
-    `DTSTART:${formatICS(inicio)}`,
-    `DTEND:${formatICS(fin)}`,
+    `UID:harvis-${Date.now()}@theeditmarbella.com`,
+    `DTSTART:${fmt(inicio)}`,`DTEND:${fmt(fin)}`,
     `SUMMARY:🏠 Visita — ${visita.propiedadTitulo}`,
-    `DESCRIPTION:Visita privada a ${visita.propiedadTitulo}\\nCliente: ${visita.nombreCliente}${visita.propiedadUrl ? '\\nVer propiedad: ' + visita.propiedadUrl : ''}${visita.notas ? '\\nNotas: ' + visita.notas : ''}`,
-    `ORGANIZER;CN=Harvis Real Estate:mailto:onboarding@resend.dev`,
-    ...(visita.emailCliente ? [`ATTENDEE;CN=${visita.nombreCliente};RSVP=TRUE:mailto:${visita.emailCliente}`] : []),
-    'STATUS:CONFIRMED',
-    'SEQUENCE:0',
+    `DESCRIPTION:Cliente: ${visita.nombreCliente}\\nPropiedad: ${visita.propiedadTitulo}${visita.propiedadUrl?'\\n'+visita.propiedadUrl:''}${visita.notas?'\\nNotas: '+visita.notas:''}`,
     `LOCATION:Marbella, España`,
-    'BEGIN:VALARM',
-    'TRIGGER:-PT60M',
-    'ACTION:EMAIL',
-    `DESCRIPTION:Recordatorio: Visita a ${visita.propiedadTitulo}`,
-    'END:VALARM',
-    'BEGIN:VALARM',
-    'TRIGGER:-PT30M',
-    'ACTION:DISPLAY',
-    `DESCRIPTION:Visita a ${visita.propiedadTitulo} en 30 minutos`,
-    'END:VALARM',
-    'END:VEVENT',
-    'END:VCALENDAR',
+    'STATUS:CONFIRMED','SEQUENCE:0',
+    'BEGIN:VALARM','TRIGGER:-PT60M','ACTION:EMAIL',`DESCRIPTION:Recordatorio visita ${visita.propiedadTitulo}`,'END:VALARM',
+    'BEGIN:VALARM','TRIGGER:-PT30M','ACTION:DISPLAY',`DESCRIPTION:Visita en 30 minutos`,'END:VALARM',
+    'END:VEVENT','END:VCALENDAR',
   ].join('\r\n');
 }
 
 export async function agendarVisita(visita: VisitaData) {
   try {
     const calendar = getCalendarService();
-    const calendarId = process.env.GOOGLE_CALENDAR_ID || 'enriquecortesgomez@gmail.com';
+    const calendarId = 'enriquecortesgomez@gmail.com';
     const duracion = visita.duracionMinutos || 90;
-
     const inicio = new Date(`${visita.fecha}T${visita.hora}:00`);
     const fin = new Date(inicio.getTime() + duracion * 60 * 1000);
+    const fmt = (d: Date) => d.toISOString().replace('Z', '').slice(0, 19) + '+02:00';
 
-    const formatearFecha = (d: Date) =>
-      d.toISOString().replace('Z', '+02:00').slice(0, 19) + '+02:00';
+    const fromEmail = visita.project === 'solena'
+      ? 'Solena <info@solenainmo.es>'
+      : 'The Edit Marbella <info@theeditmarbella.com>';
+    const fromDomain = visita.project === 'solena'
+      ? 'Solena Inmobiliaria'
+      : 'The Edit Marbella';
 
-    const descripcion =
-      `👤 Cliente: ${visita.nombreCliente}\n` +
-      `📧 Email: ${visita.emailCliente || 'No proporcionado'}\n` +
-      `🏠 Propiedad: ${visita.propiedadTitulo}\n` +
-      (visita.propiedadUrl ? `🔗 ${visita.propiedadUrl}\n` : '') +
-      (visita.notas ? `📝 Notas: ${visita.notas}` : '');
-
-    // Crear evento en Google Calendar de Enrique
+    // Crear evento en Google Calendar
     const evento = await calendar.events.insert({
       calendarId,
       requestBody: {
         summary: `🏠 Visita — ${visita.nombreCliente} | ${visita.propiedadTitulo}`,
-        description: descripcion,
-        start: { dateTime: formatearFecha(inicio), timeZone: 'Europe/Madrid' },
-        end: { dateTime: formatearFecha(fin), timeZone: 'Europe/Madrid' },
+        description: `👤 ${visita.nombreCliente}\n📧 ${visita.emailCliente||'Sin email'}\n🏠 ${visita.propiedadTitulo}${visita.propiedadUrl?'\n🔗 '+visita.propiedadUrl:''}${visita.notas?'\n📝 '+visita.notas:''}`,
+        start: { dateTime: fmt(inicio), timeZone: 'Europe/Madrid' },
+        end: { dateTime: fmt(fin), timeZone: 'Europe/Madrid' },
         reminders: {
           useDefault: false,
           overrides: [
@@ -106,53 +77,111 @@ export async function agendarVisita(visita: VisitaData) {
       },
     });
 
-    console.log(`[Calendar] Visita agendada: ${evento.data.htmlLink}`);
+    console.log(`[Calendar] Evento creado: ${evento.data.htmlLink}`);
 
-    // Email al cliente con archivo .ics adjunto
+    // Email al cliente con .ics adjunto
     if (visita.emailCliente) {
       const resend = new Resend(process.env.RESEND_API_KEY);
-      const icsContent = generarICS(visita, duracion);
-      const icsBase64 = Buffer.from(icsContent).toString('base64');
+      const icsBase64 = Buffer.from(generarICS(visita, duracion)).toString('base64');
+
+      const fechaFormateada = new Date(`${visita.fecha}T${visita.hora}:00`).toLocaleDateString('es-ES', {
+        weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+      });
 
       await resend.emails.send({
-        from: 'Harvis <onboarding@resend.dev>',
+        from: fromEmail,
         to: visita.emailCliente,
         subject: `Visita confirmada — ${visita.propiedadTitulo}`,
-        attachments: [
-          {
-            filename: 'visita-marbella.ics',
-            content: icsBase64,
-          },
-        ],
+        attachments: [{ filename: 'visita-marbella.ics', content: icsBase64 }],
         html: `
-          <div style="font-family: Georgia, serif; max-width: 600px; margin: 0 auto; background: #0a0a0a; color: #e8e0d0; padding: 40px; border-radius: 8px;">
-            <p style="color: #8a7a6a; font-size: 12px; letter-spacing: 3px; text-transform: uppercase; margin: 0 0 8px 0;">HARVIS — REAL ESTATE MARBELLA</p>
-            <h1 style="color: #e8e0d0; font-weight: normal; font-size: 24px; margin: 0 0 32px 0;">Visita confirmada</h1>
-            <table style="width: 100%; border-collapse: collapse; margin-bottom: 32px;">
-              <tr><td style="color: #8a7a6a; padding: 12px 0; border-bottom: 1px solid #1a1a1a; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; width: 120px;">Propiedad</td><td style="color: #e8e0d0; padding: 12px 0; border-bottom: 1px solid #1a1a1a;">${visita.propiedadTitulo}</td></tr>
-              <tr><td style="color: #8a7a6a; padding: 12px 0; border-bottom: 1px solid #1a1a1a; font-size: 12px; letter-spacing: 1px; text-transform: uppercase;">Fecha</td><td style="color: #e8e0d0; padding: 12px 0; border-bottom: 1px solid #1a1a1a;">${visita.fecha}</td></tr>
-              <tr><td style="color: #8a7a6a; padding: 12px 0; border-bottom: 1px solid #1a1a1a; font-size: 12px; letter-spacing: 1px; text-transform: uppercase;">Hora</td><td style="color: #e8e0d0; padding: 12px 0; border-bottom: 1px solid #1a1a1a;">${visita.hora} (hora de Madrid)</td></tr>
-              <tr><td style="color: #8a7a6a; padding: 12px 0; font-size: 12px; letter-spacing: 1px; text-transform: uppercase;">Duración</td><td style="color: #e8e0d0; padding: 12px 0;">${duracion} minutos</td></tr>
+          <div style="font-family:Georgia,serif;max-width:580px;margin:0 auto;background:#0a0a0a;color:#e8e0d0;padding:48px 40px;">
+            <p style="color:#8a7a6a;font-size:11px;letter-spacing:3px;text-transform:uppercase;margin:0 0 6px">${fromDomain}</p>
+            <h1 style="color:#e8e0d0;font-weight:300;font-size:22px;margin:0 0 36px;letter-spacing:0.05em">Visita confirmada</h1>
+            <table style="width:100%;border-collapse:collapse;margin-bottom:32px;">
+              <tr><td style="color:#8a7a6a;padding:12px 0;border-bottom:1px solid #1a1a1a;font-size:11px;letter-spacing:1px;text-transform:uppercase;width:110px">Propiedad</td><td style="color:#e8e0d0;padding:12px 0;border-bottom:1px solid #1a1a1a;font-size:14px">${visita.propiedadTitulo}</td></tr>
+              <tr><td style="color:#8a7a6a;padding:12px 0;border-bottom:1px solid #1a1a1a;font-size:11px;letter-spacing:1px;text-transform:uppercase">Fecha</td><td style="color:#e8e0d0;padding:12px 0;border-bottom:1px solid #1a1a1a;font-size:14px">${fechaFormateada}</td></tr>
+              <tr><td style="color:#8a7a6a;padding:12px 0;border-bottom:1px solid #1a1a1a;font-size:11px;letter-spacing:1px;text-transform:uppercase">Hora</td><td style="color:#e8e0d0;padding:12px 0;border-bottom:1px solid #1a1a1a;font-size:14px">${visita.hora} (hora de Madrid)</td></tr>
+              <tr><td style="color:#8a7a6a;padding:12px 0;font-size:11px;letter-spacing:1px;text-transform:uppercase">Duración</td><td style="color:#e8e0d0;padding:12px 0;font-size:14px">${duracion} minutos</td></tr>
             </table>
-            <p style="color: #8a7a6a; font-size: 13px; margin-bottom: 24px;">El archivo adjunto (.ics) se añadirá automáticamente a tu calendario al abrirlo.</p>
-            ${visita.propiedadUrl ? `<a href="${visita.propiedadUrl}" style="display: inline-block; background: #c8a96a; color: #0a0a0a; padding: 12px 32px; text-decoration: none; font-size: 12px; letter-spacing: 2px; text-transform: uppercase; border-radius: 2px;">Ver propiedad</a>` : ''}
-            <p style="color: #3a3a3a; font-size: 11px; text-align: center; margin-top: 40px;">Harvis Real Estate Intelligence · Marbella</p>
+            ${visita.notas?`<p style="color:#8a7a6a;font-size:13px;border-top:1px solid #1a1a1a;padding-top:20px;margin-bottom:24px">${visita.notas}</p>`:''}
+            <p style="color:#5a5a4a;font-size:12px;margin-bottom:24px">El archivo adjunto (.ics) se añade automáticamente a tu calendario al abrirlo.</p>
+            ${visita.propiedadUrl?`<a href="${visita.propiedadUrl}" style="display:inline-block;background:#c8a96a;color:#0a0a0a;padding:12px 28px;text-decoration:none;font-size:11px;letter-spacing:2px;text-transform:uppercase">Ver propiedad →</a>`:''}
+            <p style="color:#2a2a2a;font-size:11px;text-align:center;margin-top:48px;letter-spacing:0.05em">${fromDomain} · Marbella, Costa del Sol</p>
           </div>
         `,
-      }).catch((e: any) => console.error('[Resend cliente]', e.message));
-
-      console.log(`[Calendar] Email + .ics enviado a ${visita.emailCliente}`);
+      });
+      console.log(`[Calendar] Email enviado a ${visita.emailCliente}`);
     }
 
     return {
       success: true,
       eventoId: evento.data.id,
       link: evento.data.htmlLink,
-      message: `Visita con ${visita.nombreCliente} agendada para el ${visita.fecha} a las ${visita.hora}. Email de confirmación enviado.`,
+      message: `Visita con ${visita.nombreCliente} agendada para el ${visita.fecha} a las ${visita.hora}. ${visita.emailCliente ? 'Email de confirmación enviado.' : ''}`,
     };
 
   } catch (error: any) {
     console.error('[Calendar] Error:', error.message);
     return { success: false, error: error.message };
   }
+}
+
+// ─── Parser de lenguaje natural ───────────────────────────────
+export function parsearIntentVisita(texto: string): Partial<VisitaData> | null {
+  const lower = texto.toLowerCase();
+
+  // Detectar intent
+  const esVisita = /\b(agenda|agendar|reserva|reservar|programa|programar|concreta|confirma|visita|cita)\b/.test(lower);
+  if (!esVisita) return null;
+
+  const resultado: Partial<VisitaData> = {};
+
+  // Email
+  const emailMatch = texto.match(/[\w.-]+@[\w.-]+\.[a-z]{2,}/i);
+  if (emailMatch) resultado.emailCliente = emailMatch[0];
+
+  // Hora
+  const horaMatch = texto.match(/(?:a las?\s+)?(\d{1,2})(?::(\d{2}))?\s*(?:h|horas?)?/i);
+  if (horaMatch) {
+    const h = horaMatch[1].padStart(2, '0');
+    const m = (horaMatch[2] || '00').padStart(2, '0');
+    resultado.hora = `${h}:${m}`;
+  }
+
+  // Fecha
+  const hoy = new Date();
+  if (/mañana/.test(lower)) {
+    const manana = new Date(hoy); manana.setDate(hoy.getDate() + 1);
+    resultado.fecha = manana.toISOString().slice(0, 10);
+  } else if (/pasado mañana/.test(lower)) {
+    const pm = new Date(hoy); pm.setDate(hoy.getDate() + 2);
+    resultado.fecha = pm.toISOString().slice(0, 10);
+  } else {
+    // "el martes", "el lunes"...
+    const dias: Record<string,number> = { lunes:1, martes:2, miércoles:3, miercoles:3, jueves:4, viernes:5, sábado:6, sabado:6, domingo:0 };
+    for (const [dia, num] of Object.entries(dias)) {
+      if (lower.includes(dia)) {
+        const d = new Date(hoy);
+        const diff = (num - d.getDay() + 7) % 7 || 7;
+        d.setDate(d.getDate() + diff);
+        resultado.fecha = d.toISOString().slice(0, 10);
+        break;
+      }
+    }
+    // Fecha explícita "15 de julio", "15/07"
+    const fechaExp = texto.match(/(\d{1,2})\s*(?:de\s+)?(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)/i);
+    if (fechaExp) {
+      const meses: Record<string,string> = { enero:'01',febrero:'02',marzo:'03',abril:'04',mayo:'05',junio:'06',julio:'07',agosto:'08',septiembre:'09',octubre:'10',noviembre:'11',diciembre:'12' };
+      const mes = meses[fechaExp[2].toLowerCase()];
+      const dia = fechaExp[1].padStart(2, '0');
+      resultado.fecha = `${hoy.getFullYear()}-${mes}-${dia}`;
+    }
+    const fechaNum = texto.match(/(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?/);
+    if (fechaNum && !resultado.fecha) {
+      const y = fechaNum[3] ? (fechaNum[3].length === 2 ? '20'+fechaNum[3] : fechaNum[3]) : hoy.getFullYear().toString();
+      resultado.fecha = `${y}-${fechaNum[2].padStart(2,'0')}-${fechaNum[1].padStart(2,'0')}`;
+    }
+  }
+
+  return resultado;
 }

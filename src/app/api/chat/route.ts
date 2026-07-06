@@ -2,9 +2,10 @@ import { SYSTEM_PROMPT } from '../../../agents/realEstateExecutive.js';
 import { searchPropertiesInSupabase } from '../../../tools/supabaseTools.js';
 import { prepararEntornoCliente, actualizarHistorial } from '../../../tools/driveLogger.js';
 import { sendCrmLeadNotification } from '../../../tools/webhookTools.js';
+import { agendarVisita, parsearIntentVisita } from '../../../tools/calendarTools.js';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 10;
+export const maxDuration = 30;
 
 function isAuthorized(req: Request): boolean {
   const secret = process.env.AGENT_API_SECRET;
@@ -17,7 +18,7 @@ const ZONAS_COSTA_DEL_SOL = ["Golden Mile","Milla de Oro","Sierra Blanca","Nagü
 function detectarContacto(mensaje: string) {
   const emailMatch = mensaje.match(/[\w.-]+@[\w.-]+\.[a-z]{2,}/i);
   const phoneMatch = mensaje.match(/\+?[\d\s\-]{9,}/);
-  const nombreMatch = mensaje.match(/(?:soy|me llamo)\s+([A-ZÁÉÍÓÚÑa-záéíóúñ][a-záéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑa-záéíóúñ][a-záéíóúñ]+){0,2})/i);
+  const nombreMatch = mensaje.match(/(?:soy|me llamo|cliente[:\s]+|con\s+)([A-ZÁÉÍÓÚÑa-záéíóúñ][a-záéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑa-záéíóúñ][a-záéíóúñ]+){0,2})/i);
   const presupuestoMatch =
     mensaje.match(/(\d+(?:[.,]\d+)?)\s*(?:millones?|M€|M\s*eur)/i) ||
     mensaje.match(/(\d{1,3}(?:[.,]\d{3})*)\s*(?:euros?|€)/i) ||
@@ -38,13 +39,13 @@ function detectarContacto(mensaje: string) {
 
 function construirRespuesta(propiedades: any[], nombreCliente: string | null, zona: string | null): string {
   if (propiedades.length === 0) {
-    return `Encantado${nombreCliente ? `, ${nombreCliente}` : ''}. En este momento no tenemos en catálogo una propiedad que encaje exactamente con sus criterios${zona ? ` en ${zona}` : ''}. Lo que sí podemos hacer es realizar una selección curada a medida — accedemos a propiedades off-market y mandatos exclusivos que no aparecen públicamente. ¿Le parece bien que profundicemos en sus requisitos para encontrar exactamente lo que busca?`;
+    return `Encantado${nombreCliente ? `, ${nombreCliente}` : ''}. En este momento no tenemos en catálogo una propiedad que encaje exactamente${zona ? ` en ${zona}` : ''}. Tenemos acceso a propiedades off-market — ¿profundizamos en sus requisitos?`;
   }
-  const intro = `Encantado${nombreCliente ? `, ${nombreCliente}` : ''}. He encontrado ${propiedades.length === 1 ? 'esta propiedad' : 'estas propiedades'} que podrían interesarte:\n\n`;
+  const intro = `Encantado${nombreCliente ? `, ${nombreCliente}` : ''}. He encontrado ${propiedades.length === 1 ? 'esta propiedad' : 'estas propiedades'}:\n\n`;
   const lista = propiedades.map((p: any) =>
     `**${p.titulo}** — ${p.referencia}\n📍 ${p.municipio} · 🛏 ${p.habitaciones} hab · 💰 €${Number(p.precio).toLocaleString('es-ES')}\n🔗 ${p.url}`
   ).join('\n\n');
-  return intro + lista + '\n\n¿Te gustaría programar una visita privada o necesitas más información?';
+  return intro + lista + '\n\n¿Te gustaría programar una visita privada?';
 }
 
 export async function POST(req: Request) {
@@ -57,7 +58,7 @@ export async function POST(req: Request) {
     return new Response(JSON.stringify({ error: 'Body inválido.' }), { status: 400 });
   }
 
-  const { messages: incomingMessages } = body;
+  const { messages: incomingMessages, project = 'tem' } = body;
   const apiKey = process.env.NVIDIA_API_KEY;
   if (!apiKey) return new Response(JSON.stringify({ error: 'Falta NVIDIA_API_KEY.' }), { status: 500 });
 
@@ -66,78 +67,107 @@ export async function POST(req: Request) {
   const todosLosMensajes = incomingMessages.map((m: any) => m.content).join('\n');
 
   // Detectar tipo de lead
-  const esVendedorCrm = /quiero vender|vendo|vender mi|tengo.*(?:piso|villa|casa|apartamento|finca|propiedad).*(?:vender|venta)|busco comprador|como funcionais|cómo funcionáis|servicio.*venta|vender.*propiedad/i.test(ultimoMensaje);
-  const tipoLeadCrm = esVendedorCrm ? 'Captacion' : 'Venta';
-  const esCaptacion = esVendedorCrm;
+  const esVendedor = /quiero vender|vendo|vender mi|tengo.*(?:piso|villa|casa|apartamento|finca|propiedad).*(?:vender|venta)|busco comprador|como funcionais|cómo funcionáis|servicio.*venta|vender.*propiedad/i.test(ultimoMensaje);
+  const tipoLeadCrm = esVendedor ? 'Captacion' : 'Venta';
 
-  // Detectar contacto
+  // Detectar contacto en toda la conversación
   const contacto = detectarContacto(todosLosMensajes);
   const zonaCrm = ZONAS_COSTA_DEL_SOL.find(z => ultimoMensaje.toLowerCase().includes(z.toLowerCase())) || undefined;
 
-  // Insertar lead fire-and-forget
+  // Auto-CRM fire-and-forget
   if (contacto.nombre && (contacto.email || contacto.phone)) {
-    const nombreStr = contacto.nombre;
-    const contactoStr = contacto.email || contacto.phone || '';
-    console.log(`[${requestId}] auto-crm: ${nombreStr} / ${contactoStr} / ${tipoLeadCrm}`);
     sendCrmLeadNotification({
-      nombre: nombreStr, contacto: contactoStr,
+      nombre: contacto.nombre, contacto: contacto.email || contacto.phone || '',
       presupuesto: contacto.presupuesto || undefined,
       notasCualificacion: ultimoMensaje.slice(0, 300), tipoLead: tipoLeadCrm,
-    }).catch(() => {});
-    fetch('https://harvis-six.vercel.app/api/notify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        type: 'INSERT',
-        table: tipoLeadCrm === 'Captacion' ? 'captacion_leads' : 'leads',
-        record: { name: nombreStr, email: contactoStr, notas: ultimoMensaje.slice(0, 300), zona: zonaCrm },
-      }),
     }).catch(() => {});
   }
 
   try {
-    // Respuesta rápida para captación
-    if (esCaptacion) {
-      const nombreCap = contacto.nombre || '';
-      const respuestaCap = nombreCap
-        ? `Encantado, ${nombreCap}. En The Edit Marbella nos especializamos en la venta de propiedades de lujo en la Costa del Sol. Trabajamos con compradores precualificados, valoración por datos de mercado reales y producción editorial cinematográfica. ¿Podría contarme más sobre su propiedad? ¿En qué zona se encuentra y qué precio estimado tiene en mente?`
-        : 'Encantado. ¿Con quién tengo el placer de hablar? Me gustaría conocer más sobre su propiedad.';
-      return new Response(
-        JSON.stringify({ success: true, message: respuestaCap, docId: null, requestId }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } }
-      );
+    // ── DETECCIÓN DE VISITA ─────────────────────────────────────
+    const intentVisita = parsearIntentVisita(ultimoMensaje);
+    if (intentVisita) {
+      // Extraer nombre del cliente de toda la conversación
+      const nombreCliente = contacto.nombre || 'Cliente';
+
+      // Extraer propiedad mencionada
+      const propMatch = todosLosMensajes.match(/(?:villa|apartamento|ático|piso|propiedad|casa)\s+[A-ZÁ][a-záéíóúñ\s]+/i);
+      const propiedadTitulo = propMatch?.[0] || 'Propiedad en Marbella';
+
+      // Extraer URL de propiedad si existe en el historial
+      const urlMatch = todosLosMensajes.match(/https?:\/\/\S+theeditmarbella\S+/i);
+      const propiedadUrl = urlMatch?.[0];
+
+      // Validar que tenemos fecha y hora mínimas
+      if (intentVisita.fecha && intentVisita.hora) {
+        const visita = {
+          nombreCliente,
+          emailCliente: intentVisita.emailCliente || contacto.email || undefined,
+          propiedadTitulo,
+          propiedadUrl,
+          fecha: intentVisita.fecha,
+          hora: intentVisita.hora,
+          duracionMinutos: 90,
+          project: project as 'tem' | 'solena',
+        };
+
+        const resultado = await agendarVisita(visita);
+
+        if (resultado.success) {
+          const respuesta = `✅ Visita agendada.\n\n📅 **${visita.nombreCliente}** · ${visita.propiedadTitulo}\n🗓 ${visita.fecha} a las ${visita.hora}\n${visita.emailCliente ? `📧 Confirmación enviada a ${visita.emailCliente}` : ''}\n🔗 ${resultado.link}`;
+          return new Response(JSON.stringify({ success: true, message: respuesta, requestId }), {
+            status: 200, headers: { 'Content-Type': 'application/json' },
+          });
+        } else {
+          return new Response(JSON.stringify({ success: false, message: `Error al agendar: ${resultado.error}`, requestId }), {
+            status: 200, headers: { 'Content-Type': 'application/json' },
+          });
+        }
+      } else {
+        // Faltan datos — pedir al usuario
+        const falta = !intentVisita.fecha ? 'la fecha' : 'la hora';
+        return new Response(JSON.stringify({ success: true, message: `Para confirmar la visita necesito ${falta}. ¿Me lo puedes indicar?`, requestId }), {
+          status: 200, headers: { 'Content-Type': 'application/json' },
+        });
+      }
     }
 
-    // Búsqueda directa para compradores
+    // ── CAPTACIÓN ───────────────────────────────────────────────
+    if (esVendedor) {
+      const nombre = contacto.nombre || '';
+      const respuesta = nombre
+        ? `Encantado, ${nombre}. En ${project === 'solena' ? 'Solena' : 'The Edit Marbella'} nos especializamos en la venta de propiedades en la Costa del Sol. Trabajamos con compradores precualificados y valoración por datos reales de mercado. ¿En qué zona se encuentra su propiedad y qué precio estimado tiene en mente?`
+        : '¿Con quién tengo el placer de hablar? Me gustaría conocer más sobre su propiedad.';
+      return new Response(JSON.stringify({ success: true, message: respuesta, requestId }), {
+        status: 200, headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    // ── BÚSQUEDA DIRECTA ────────────────────────────────────────
     const zonaDirecta = ZONAS_COSTA_DEL_SOL.find(z => ultimoMensaje.toLowerCase().includes(z.toLowerCase())) || null;
-    const presupuestoDirecto = contacto.presupuesto;
-
-    // No buscar si ya hay propiedades en historial o es seguimiento
     const yaHayPropiedades = todosLosMensajes.includes('theeditmarbella.com/es/propiedades');
-    const esMensajeSeguimiento = /visita|agendar|llamada|contacto|interesa|mas info|cuando|disponible|fotos/i.test(ultimoMensaje);
+    const esSeguimiento = /visita|agendar|llamada|interesa|cuando|disponible|fotos/i.test(ultimoMensaje);
 
-    if ((zonaDirecta || presupuestoDirecto) && !yaHayPropiedades && !esMensajeSeguimiento) {
-      console.log(`[${requestId}] búsqueda directa: ${zonaDirecta} / ${presupuestoDirecto}`);
-      const resultadoBusqueda = await searchPropertiesInSupabase({
+    if ((zonaDirecta || contacto.presupuesto) && !yaHayPropiedades && !esSeguimiento) {
+      const resultado = await searchPropertiesInSupabase({
         urbanizacion: zonaDirecta || undefined,
         municipioDeducido: zonaDirecta || undefined,
-        precioMax: presupuestoDirecto || undefined,
+        precioMax: contacto.presupuesto || undefined,
       });
-      if ((resultadoBusqueda.propiedades ?? []).length > 0) {
-        const respuesta = construirRespuesta(resultadoBusqueda.propiedades ?? [], contacto.nombre, zonaDirecta);
+      if ((resultado.propiedades ?? []).length > 0) {
+        const respuesta = construirRespuesta(resultado.propiedades ?? [], contacto.nombre, zonaDirecta);
         if (contacto.nombre) {
           prepararEntornoCliente(contacto.nombre, 'Venta')
             .then(r => { if (r.docId) actualizarHistorial(r.docId, ultimoMensaje, respuesta).catch(() => {}); })
             .catch(() => {});
         }
-        return new Response(
-          JSON.stringify({ success: true, message: respuesta, docId: null, requestId }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } }
-        );
+        return new Response(JSON.stringify({ success: true, message: respuesta, requestId }), {
+          status: 200, headers: { 'Content-Type': 'application/json' },
+        });
       }
     }
 
-    // NVIDIA con streaming
+    // ── NVIDIA STREAMING ────────────────────────────────────────
     const nvidiaRes = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
@@ -147,68 +177,48 @@ export async function POST(req: Request) {
           { role: 'system', content: SYSTEM_PROMPT },
           ...incomingMessages.map((m: any) => ({ role: m.role, content: m.content })),
         ],
-        max_tokens: 150,
-        temperature: 0.4,
-        stream: true,
+        max_tokens: 150, temperature: 0.4, stream: true,
       }),
     });
 
     if (!nvidiaRes.ok) throw new Error(`NVIDIA ${nvidiaRes.status}`);
 
-    // Reenviar el stream directamente al cliente
     const stream = new ReadableStream({
       async start(controller) {
         const reader = nvidiaRes.body!.getReader();
         const decoder = new TextDecoder();
         let fullText = '';
-
         try {
           while (true) {
             const { done, value } = await reader.read();
             if (done) break;
-
             const chunk = decoder.decode(value);
-            const lines = chunk.split('\n').filter(l => l.startsWith('data: '));
-
-            for (const line of lines) {
+            for (const line of chunk.split('\n').filter(l => l.startsWith('data: '))) {
               const data = line.slice(6);
               if (data === '[DONE]') continue;
               try {
-                const parsed = JSON.parse(data);
-                const token = parsed.choices?.[0]?.delta?.content || '';
-                if (token) {
-                  fullText += token;
-                  controller.enqueue(new TextEncoder().encode(token));
-                }
+                const token = JSON.parse(data).choices?.[0]?.delta?.content || '';
+                if (token) { fullText += token; controller.enqueue(new TextEncoder().encode(token)); }
               } catch {}
             }
           }
-
-          // Guardar conversación async
           if (fullText && contacto.nombre) {
             prepararEntornoCliente(contacto.nombre, 'Venta')
               .then(r => { if (r.docId) actualizarHistorial(r.docId, ultimoMensaje, fullText).catch(() => {}); })
               .catch(() => {});
           }
-        } finally {
-          controller.close();
-        }
+        } finally { controller.close(); }
       }
     });
 
     return new Response(stream, {
-      headers: {
-        'Content-Type': 'text/plain; charset=utf-8',
-        'Transfer-Encoding': 'chunked',
-        'X-Request-Id': requestId,
-      },
+      headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Transfer-Encoding': 'chunked', 'X-Request-Id': requestId },
     });
 
   } catch (error: any) {
     console.error(`[${requestId}] Error:`, error.message);
-    return new Response(
-      JSON.stringify({ success: false, error: error.message, requestId }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
-    );
+    return new Response(JSON.stringify({ success: false, error: error.message, requestId }), {
+      status: 500, headers: { 'Content-Type': 'application/json' },
+    });
   }
 }

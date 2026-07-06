@@ -23,7 +23,7 @@ const NAV = [
 
 export default function AdminPage() {
   const [project, setProject] = useState<'tem'|'solena'>('tem');
-  const [tab, setTab] = useState('Panel');
+  const [tab, setTab] = useState('Chat');
   const [leadFilter, setLeadFilter] = useState<'todos'|'captacion'|'venta'>('todos');
   const [leads, setLeads] = useState<any[]>([]);
   const [competencia, setCompetencia] = useState<any[]>([]);
