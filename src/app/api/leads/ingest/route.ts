@@ -10,10 +10,9 @@ function getSupabase() {
   );
 }
 
-function clasificarTemperatura(tiempoMercado: number, plazoDeseado: string): 'caliente' | 'templado' {
-  const esAhora = ['ahora', 'ya', 'inmediato', 'urgente'].some(p => plazoDeseado?.toLowerCase().includes(p));
-  if (tiempoMercado > 3 || esAhora) return 'caliente';
-  return 'templado';
+function clasificarTemperatura(plazoDeseado: string): 'caliente' | 'templado' {
+  const caliente = ['lo antes posible', 'antes', 'ya', 'urgente', 'inmediato'];
+  return caliente.some(p => plazoDeseado?.toLowerCase().includes(p)) ? 'caliente' : 'templado';
 }
 
 function normalizePhone(raw: string | undefined): string {
@@ -37,17 +36,18 @@ export async function POST(req: Request) {
     const precio_estimado = parseFloat(body.precio ?? body.precio_estimado ?? '0') || null;
     const tiempo_mercado  = parseInt(body.tiempo_publicado ?? body.tiempo_mercado ?? '0', 10) || 0;
     const plazo_deseado   = body.plazo ?? body.plazo_deseado ?? '';
+    const tipo_lead       = body.tipo_lead ?? 'captacion';
 
     if (!name) return Response.json({ error: 'name es obligatorio' }, { status: 400 });
 
-    const temperatura = clasificarTemperatura(tiempo_mercado, plazo_deseado);
+    const temperatura = clasificarTemperatura(plazo_deseado);
 
     const { data: lead, error } = await supabase
       .from('leads')
       .insert({
         name, email, phone, zona, tipo_propiedad,
         precio_estimado, tiempo_mercado, plazo_deseado,
-        temperatura, fuente: 'meta_ads',
+        temperatura, tipo_lead, fuente: 'meta_ads',
         fase: 'nuevo', estado: 'activo', agente: 'Solena',
       })
       .select()
@@ -64,8 +64,8 @@ export async function POST(req: Request) {
       await inngest.send({ name: 'leads/procesar-templado', data: { lead } });
     }
 
-    console.log(`[Ingest] ${temperatura.toUpperCase()} — ${lead.id} ${name}`);
-    return Response.json({ success: true, lead_id: lead.id, temperatura });
+    console.log(`[Ingest] ${temperatura.toUpperCase()} ${tipo_lead} — ${lead.id} ${name}`);
+    return Response.json({ success: true, lead_id: lead.id, temperatura, tipo_lead });
 
   } catch (err: any) {
     console.error('[Ingest] Error:', err.message);
