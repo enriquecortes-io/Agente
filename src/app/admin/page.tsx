@@ -1,13 +1,13 @@
 'use client';
 import { useState, useEffect } from 'react';
 
-const DARK = '#0c0c0a';
-const SURFACE = '#141412';
-const SURFACE2 = '#1c1c19';
-const BORDER = '#2a2a24';
-const CREAM = '#f0ebe0';
-const MUTED = '#5a5a4a';
-const MUTED2 = '#3a3a30';
+const DARK = '#111111';
+const SURFACE = '#1e1e1e';
+const SURFACE2 = '#2a2a2a';
+const BORDER = '#333333';
+const CREAM = '#ffffff';
+const MUTED = '#888888';
+const MUTED2 = '#444444';
 const TEM_GOLD = '#c9a96e';
 const SOL_TERRA = '#c1694f';
 const apiKey = 'dda3fb2a36a29de06fa337e5a72b29638a12a0afea647e8fd14af556d76f0e1d';
