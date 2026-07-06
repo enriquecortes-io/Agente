@@ -41,12 +41,16 @@ export default function AdminPage() {
   const [competidorUsername, setCompetidorUsername] = useState('');
   const [analizando, setAnalizando] = useState(false);
   const [updatingLead, setUpdatingLead] = useState<string|null>(null);
+  const [calEvents, setCalEvents] = useState<any[]>([]);
+  const [calLoading, setCalLoading] = useState(false);
+  const [semanaInicio, setSemanaInicio] = useState<Date>(new Date());
 
   const accent = project === 'tem' ? TEM_GOLD : SOL_TERRA;
 
   useEffect(() => {
     if (tab === 'Leads') fetchLeads();
     if (tab === 'Análisis') fetchCompetencia();
+    if (tab === 'Chat') fetchCalendar();
     if (tab === 'Contenido') fetchPublicaciones();
   }, [tab, project]);
 
@@ -65,6 +69,17 @@ export default function AdminPage() {
     const data = await res.json();
     setPublicaciones(data.publicaciones || []);
   }
+  async function fetchCalendar() {
+    setCalLoading(true);
+    try {
+      const res = await fetch('/api/admin/calendar');
+      const data = await res.json();
+      setCalEvents(data.eventos || []);
+      if (data.semanaInicio) setSemanaInicio(new Date(data.semanaInicio));
+    } catch(e) { console.error(e); }
+    setCalLoading(false);
+  }
+
   async function updateLeadFase(id:string, fase:string) {
     setUpdatingLead(id);
     await fetch('/api/admin/leads', { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id,fase,project}) });
@@ -389,6 +404,45 @@ export default function AdminPage() {
             {tab==='Chat' && (
               <div style={{display:'flex',flexDirection:'column',height:'calc(100vh - 160px)'}}>
                 <div style={{flex:1,overflowY:'auto',paddingBottom:'20px'}}>
+                  {/* CALENDARIO SEMANAL */}
+                  <div style={{marginBottom:'28px'}}>
+                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'14px'}}>
+                      <div style={{fontSize:'10px',letterSpacing:'0.2em',color:MUTED,textTransform:'uppercase' as const}}>Esta semana</div>
+                      <button onClick={fetchCalendar} style={{background:'none',border:'none',color:MUTED,fontSize:'11px',cursor:'pointer',letterSpacing:'0.05em'}}>↻</button>
+                    </div>
+                    {calLoading ? (
+                      <div style={{fontSize:'12px',color:MUTED}}>Cargando calendario...</div>
+                    ) : (
+                      <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:'6px'}}>
+                        {Array.from({length:7}).map((_,i)=>{
+                          const dia = new Date(semanaInicio);
+                          dia.setDate(semanaInicio.getDate()+i);
+                          const esHoy = dia.toDateString()===new Date().toDateString();
+                          const diaStr = dia.toISOString().slice(0,10);
+                          const eventosDelDia = calEvents.filter(e=>e.inicio?.startsWith(diaStr));
+                          const nombreDia = dia.toLocaleDateString('es-ES',{weekday:'short'});
+                          return (
+                            <div key={i} style={{background:esHoy?SURFACE2:SURFACE,border:`1px solid ${esHoy?accent:BORDER}`,borderRadius:'4px',padding:'8px 6px',minHeight:'80px'}}>
+                              <div style={{fontSize:'10px',letterSpacing:'0.08em',color:esHoy?accent:MUTED,textTransform:'uppercase' as const,marginBottom:'2px'}}>{nombreDia}</div>
+                              <div style={{fontSize:'16px',fontWeight:'300',color:esHoy?accent:'#ffffff',marginBottom:'6px'}}>{dia.getDate()}</div>
+                              {eventosDelDia.slice(0,3).map((ev,j)=>(
+                                <div key={j} title={ev.titulo} style={{fontSize:'10px',color:MUTED,background:MUTED2,borderRadius:'2px',padding:'2px 4px',marginBottom:'2px',overflow:'hidden',whiteSpace:'nowrap' as const,textOverflow:'ellipsis',cursor:'pointer'}}
+                                  onClick={()=>ev.link&&window.open(ev.link,'_blank')}>
+                                  {!ev.todoElDia&&ev.inicio?new Date(ev.inicio).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'})+' ':''}{ev.titulo}
+                                </div>
+                              ))}
+                              {eventosDelDia.length>3&&<div style={{fontSize:'10px',color:MUTED}}>+{eventosDelDia.length-3} más</div>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* DIVISOR */}
+                  <div style={{borderTop:`1px solid ${BORDER}`,marginBottom:'24px'}}></div>
+
+                  {/* CHAT */}
                   {messages.length===0&&(
                     <div style={{padding:'48px 0'}}>
                       <div style={{fontSize:'10px',letterSpacing:'0.2em',color:MUTED,textTransform:'uppercase',marginBottom:'24px'}}>Acciones frecuentes</div>
