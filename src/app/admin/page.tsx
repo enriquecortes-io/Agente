@@ -40,6 +40,9 @@ export default function AdminPage() {
   const [ingestUrl, setIngestUrl] = useState('');
   const [ingestando, setIngestando] = useState(false);
   const [ingestResult, setIngestResult] = useState<any>(null);
+  const [emailLeads, setEmailLeads] = useState<any[]>([]);
+  const [campaignLoading, setCampaignLoading] = useState(false);
+  const [campaignFilter, setCampaignFilter] = useState('todos'); // todos, pendiente, enviado, bounced
  const [generando, setGenerando] = useState(false);
  const [copyResult, setCopyResult] = useState<any>(null);
  const [competidorUsername, setCompetidorUsername] = useState('');
@@ -52,7 +55,17 @@ export default function AdminPage() {
    if (activeTab === 'Publicaciones') fetchPublicaciones();
  }, [activeTab]);
 
- async function fetchLeads() {
+ async function fetchEmailLeads() {
+    try {
+      const res = await fetch('/api/admin/campanas');
+      const data = await res.json();
+      setEmailLeads(data.leads || []);
+    } catch (e) {
+      console.error('Error cargando leads:', e);
+    }
+  }
+
+  async function fetchLeads() {
    const res = await fetch('/api/admin/leads');
    const data = await res.json();
    setLeads(data.leads || []);
@@ -158,7 +171,24 @@ async function generarPublicacion() {
    setGenerando(false);
  }
 
- async function analizarCompetidor() {
+ async function enviarCampana() {
+    setCampaignLoading(true);
+    try {
+      const res = await fetch('/api/campaigns/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ template: 'solena-captacion' }),
+      });
+      const data = await res.json();
+      alert(data.message || 'Campaña enviada');
+      fetchEmailLeads();
+    } catch (e) {
+      alert('Error enviando campaña: ' + e);
+    }
+    setCampaignLoading(false);
+  }
+
+  async function analizarCompetidor() {
    if (!competidorUsername.trim()) return;
    setAnalizando(true);
    try {
