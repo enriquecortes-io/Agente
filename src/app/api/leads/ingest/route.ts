@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic';
 
 function getSupabase() {
   return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 }
@@ -55,7 +55,7 @@ export async function POST(req: Request) {
 
     if (error) {
       console.error('[Ingest] Supabase error:', error);
-      return Response.json({ error: 'Error guardando lead' }, { status: 500 });
+      return Response.json({ error: 'Error guardando lead', detail: error.message }, { status: 500 });
     }
 
     if (temperatura === 'caliente') {
@@ -68,7 +68,7 @@ export async function POST(req: Request) {
     return Response.json({ success: true, lead_id: lead.id, temperatura });
 
   } catch (err: any) {
-    console.error('[Ingest] Error:', err);
-    return Response.json({ error: 'Error interno' }, { status: 500 });
+    console.error('[Ingest] Error:', err.message);
+    return Response.json({ error: 'Error interno', detail: err.message }, { status: 500 });
   }
 }
