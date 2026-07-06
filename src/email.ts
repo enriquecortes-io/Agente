@@ -40,6 +40,7 @@ export function templateImpacto3(nombre: string, zona: string): string {
         .logo { font-size: 18px; font-weight: 700; letter-spacing: 0.12em; color: #6B3F2A; margin-bottom: 40px; text-transform: uppercase; }
         .headline { font-size: 24px; line-height: 1.4; margin-bottom: 20px; color: #1a1a1a; }
         .body-text { font-size: 15px; line-height: 1.8; color: #555; margin-bottom: 16px; }
+        .highlight { background: #F5F0E8; border-left: 3px solid #6B3F2A; padding: 16px 20px; margin: 24px 0; font-size: 14px; color: #444; line-height: 1.7; }
         .cta-wrap { margin-top: 32px; margin-bottom: 8px; }
         .cta { display: inline-block; background: #25D366; color: #fff !important; text-decoration: none;
                padding: 14px 28px; font-size: 15px; border-radius: 4px; font-family: Georgia, serif; }
@@ -52,25 +53,38 @@ export function templateImpacto3(nombre: string, zona: string): string {
         <div class="logo">Solena</div>
 
         <p class="headline">
-          Hola ${nombre}, gracias por interesarte<br>en propiedades en ${zona || 'la Costa del Sol'} 🏡
+          Hola ${nombre}, hemos recibido tu consulta 👋
         </p>
 
         <p class="body-text">
-          He recibido tu consulta y ya estoy mirando qué tenemos disponible en ${zona || 'la zona'} que encaje con lo que buscas.
+          Gracias por contactar con Solena. Ya tenemos los datos de tu propiedad en ${zona || 'la Costa del Sol'} y en menos de 24 horas te enviamos una valoración sin compromiso.
         </p>
 
         <p class="body-text">
-          En cuanto tenga algo concreto te lo mando. Pero si quieres hablarlo antes o tienes alguna pregunta, escríbeme directamente por WhatsApp — es lo más rápido.
+          Mientras tanto, aquí tienes un resumen de cómo trabajamos:
+        </p>
+
+        <div class="highlight">
+          ✓ <strong>Solo cobramos si vendemos</strong> — sin costes anticipados<br>
+          ✓ <strong>60 días de media</strong> con exclusiva (frente a 4 meses sin agencia)<br>
+          ✓ <strong>+30 portales</strong> y 8.000 visualizaciones en los primeros 10 días<br>
+          ✓ <strong>Compradores con financiación aprobada</strong> — sin operaciones que se caen
+        </div>
+
+        <p class="body-text">
+          Si tienes alguna pregunta o quieres hablar antes de la valoración, escríbenos directamente por WhatsApp. Es lo más rápido.
         </p>
 
         <div class="cta-wrap">
           <a class="cta" href="${waLink}">
-            💬 Escribir por WhatsApp
+            💬 Hablar por WhatsApp
           </a>
         </div>
 
         <div class="footer">
-          Has recibido este email porque dejaste tus datos en uno de nuestros anuncios.<br>
+          Solena Inmobiliaria · Urb. La Alzambra, Centro de Negocios Vasari, Marbella<br>
+          +34 610 589 716 · info@solenainmo.es<br><br>
+          Has recibido este email porque dejaste tus datos en uno de nuestros formularios.<br>
           <a href="#">Darse de baja</a>
         </div>
       </div>
