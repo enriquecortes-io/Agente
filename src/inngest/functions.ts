@@ -108,9 +108,31 @@ export const ingestPropertySolena = inngest.createFunction(
   },
   async ({ event, step }: any) => {
     const { url, slug } = event.data;
+
+    // Step 1: extraer datos y contar imágenes
+    const datosBasicos = await step.run('extraer-datos', async () => {
+      const { extraerDatosPropiedad } = await import('../tools/propertyIngestionTools.js');
+      const datos = await extraerDatosPropiedad(url);
+      return {
+        titulo: datos.titulo,
+        precio: datos.precio,
+        habitaciones: datos.habitaciones,
+        banos: datos.banos,
+        m2: datos.m2,
+        textoLimpio: datos.textoLimpio.slice(0, 1000),
+        imagenes: datos.imagenes,
+        urlOriginal: url,
+        totalImagenes: datos.imagenes.length,
+      };
+    });
+
+    console.log(`[Solena Inngest] Imágenes extraídas: ${datosBasicos.totalImagenes}`);
+
+    // Step 2: ingesta completa
     const result = await step.run('ingerir-propiedad-solena', async () => {
       return await ingerirPropiedadSolena(url, slug);
     });
-    return result;
+
+    return { ...result, debug: { imagenesEncontradas: datosBasicos.totalImagenes } };
   }
 );
