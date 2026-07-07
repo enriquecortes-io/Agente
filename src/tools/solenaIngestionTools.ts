@@ -46,6 +46,7 @@ async function subirImagenesDriveSolenaInternal(imagenes: string[], nombrePropie
       parents: [parentFolderId],
     },
     fields: 'id',
+    supportsAllDrives: true,
   });
   const carpetaId = folder.data.id!;
   console.log(`[Solena Drive] Carpeta creada: ${carpetaId}`);
@@ -77,11 +78,13 @@ async function subirImagenesDriveSolenaInternal(imagenes: string[], nombrePropie
         requestBody: { name: fileName, parents: [carpetaId] },
         media: { mimeType, body: Readable.from(Buffer.from(buffer)) },
         fields: 'id',
+        supportsAllDrives: true,
       });
 
       await drive.permissions.create({
         fileId: file.data.id!,
         requestBody: { role: 'reader', type: 'anyone' },
+        supportsAllDrives: true,
       });
 
       urls.push(`/api/drive?id=${file.data.id}`);
