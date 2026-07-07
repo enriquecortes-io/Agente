@@ -101,7 +101,11 @@ export const procesarTemplado = inngest.createFunction(
 );
 
 export const ingestPropertySolena = inngest.createFunction(
-  { id: 'ingest-property-solena', triggers: [{ event: 'solena/ingest' }] },
+  { 
+    id: 'ingest-property-solena', 
+    triggers: [{ event: 'solena/ingest' }],
+    timeouts: { finish: '10m' },
+  },
   async ({ event, step }: any) => {
     const { url, slug } = event.data;
     const result = await step.run('ingerir-propiedad-solena', async () => {

@@ -43,7 +43,7 @@ async function subirImagenesDriveSolena(imagenes: string[], nombrePropiedad: str
   const urls: string[] = [];
   const { Readable } = await import('stream');
 
-  for (let i = 0; i < Math.min(imagenes.length, 30); i++) {
+  for (let i = 0; i < Math.min(imagenes.length, 15); i++) {
     try {
       const imgRes = await fetch(imagenes[i], {
         headers: { 'User-Agent': 'Mozilla/5.0', 'Referer': 'https://www.google.com' },
