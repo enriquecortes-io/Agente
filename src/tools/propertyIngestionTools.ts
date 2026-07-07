@@ -58,6 +58,20 @@ export async function extraerDatosPropiedad(url: string) {
     imageSet.add(original);
   }
 
+  // Extraer imágenes de galerías WordPress — href en <a class="proj_gallery__cell"> o similar
+  const galleryHrefMatches = html.matchAll(/class="[^"]*(?:gallery|lightbox|proj_gallery)[^"]*"[^>]*href="(https?:\/\/[^"]+\.(?:jpg|jpeg|png|webp)[^"]*)"/gi);
+  for (const m of galleryHrefMatches) {
+    imageSet.add(m[1].split('?')[0]);
+  }
+  // También capturar href directos en anchors con imágenes
+  const anchorHrefMatches = html.matchAll(/<a[^>]+href="(https?:\/\/[^"]+\/wp-content\/uploads\/[^"]+\.(?:jpg|jpeg|png|webp))"[^>]*>/gi);
+  for (const m of anchorHrefMatches) {
+    // Solo URLs sin sufijos de tamaño (-NNNxNNN) — son los originales a full res
+    if (!m[1].match(/-\d+x\d+\.(?:jpg|jpeg|png|webp)$/i)) {
+      imageSet.add(m[1].split('?')[0]);
+    }
+  }
+
   // Extraer imágenes de CDNs sin extensión en la URL (Uploadcare, Imgix, Cloudinary, etc.)
   // Patrón: dominio-cdn.com/{uuid}/ con transformaciones tipo /-/format/webp/
   const cdnMatches = html.matchAll(/https:\/\/(?:uploadcare\.[a-z.]+|[\w-]+\.cloudinary\.com|[\w-]+\.imgix\.net)\/[a-f0-9-]{36}\/[^"'\s)]*/gi);
