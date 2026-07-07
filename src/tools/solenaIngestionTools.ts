@@ -151,7 +151,12 @@ export async function ingerirPropiedadSolena(url: string, slug?: string): Promis
       .replace(/\s+/g, '-')
       .slice(0, 60);
 
-    const [descripcion, galeriaUrls] = await Promise.all([
+    console.log(`[Solena] Imágenes extraídas del HTML: ${datos.imagenes.length}`);
+  if (datos.imagenes.length > 0) {
+    console.log(`[Solena] Primeras 3 URLs:`, datos.imagenes.slice(0, 3));
+  }
+
+  const [descripcion, galeriaUrls] = await Promise.all([
       generarDescripcion(datos),
       subirImagenesDriveSolena(datos.imagenes, datos.titulo),
     ]);
