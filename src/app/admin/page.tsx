@@ -38,6 +38,8 @@ export default function AdminPage() {
   const [propForm, setPropForm] = useState({titulo:'',precio:'',zona:'',habitaciones:'',m2:'',slug:'',descripcion:''});
   const [generando, setGenerando] = useState(false);
   const [copyResult, setCopyResult] = useState<any>(null);
+  const [uploadingDrive, setUploadingDrive] = useState(false);
+  const [uploadResult, setUploadResult] = useState<any>(null);
   const [competidorUsername, setCompetidorUsername] = useState('');
   const [analizando, setAnalizando] = useState(false);
   const [updatingLead, setUpdatingLead] = useState<string|null>(null);
@@ -311,6 +313,15 @@ export default function AdminPage() {
                     </button>
                   </div>
                 </div>
+                {uploadResult&&(
+                  <div style={{border:`1px solid ${uploadResult.error?'#6a3030':accent+'40'}`,borderRadius:'4px',padding:'16px',marginBottom:'12px'}}>
+                    {uploadResult.error
+                      ? <div style={{color:'#c05050',fontSize:'13px'}}>{uploadResult.error}</div>
+                      : <div style={{fontSize:'13px',color:CREAM}}>☁ Drive: {uploadResult.subidas} subidas · {uploadResult.fallback} en URL directa</div>
+                    }
+                  </div>
+                )}
+
                 {ingestResult&&(
                   <div style={{border:`1px solid ${ingestResult.error?'#6a3030':accent+'40'}`,borderRadius:'4px',padding:'20px'}}>
                     {ingestResult.error
