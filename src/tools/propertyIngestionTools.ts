@@ -297,11 +297,21 @@ export async function ingerirPropiedad(url: string, slug?: string): Promise<{
       .replace(/\s+/g, '-')
       .slice(0, 60);
 
-    // 3. Generar descripción y subir imágenes en paralelo
-    const [descripcion, galeriaUrls] = await Promise.all([
-      generarDescripcion(datos),
-      subirImagenesDrive(datos.imagenes, datos.titulo),
-    ]);
+    // 3. Generar descripción
+    const descripcion = await generarDescripcion(datos);
+
+    // 4. Subir imágenes a Drive — con fallback a URLs directas si Drive falla
+    let galeriaUrls: string[] = [];
+    try {
+      galeriaUrls = await subirImagenesDrive(datos.imagenes, datos.titulo);
+    } catch(e: any) {
+      console.log('[TEM] Drive error:', e.message);
+    }
+
+    if (galeriaUrls.length === 0 && datos.imagenes.length > 0) {
+      console.log(`[TEM] Fallback URLs directas: ${datos.imagenes.length}`);
+      galeriaUrls = datos.imagenes.slice(0, 30);
+    }
 
     // 4. Insertar en Supabase
     const propiedad = await insertarPropiedad(datos, descripcion, galeriaUrls, slugFinal);
