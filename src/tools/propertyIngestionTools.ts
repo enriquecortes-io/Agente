@@ -72,6 +72,17 @@ export async function extraerDatosPropiedad(url: string) {
     }
   }
 
+  // Método 3: wp-content URLs sin sufijo de tamaño — captura todo lo que se perdió
+  const wpAllMatches = html.matchAll(/https?:\/\/[^"'\s]+\/wp-content\/uploads\/[^"'\s]+\.(?:jpg|jpeg|png|webp)/gi);
+  for (const m of wpAllMatches) {
+    if (!m[0].match(/-\d+x\d+\.(?:jpg|jpeg|png|webp)$/i)) {
+      const clean = m[0].split('?')[0];
+      if (!clean.includes('favicon') && !clean.includes('cropped')) {
+        imageSet.add(clean);
+      }
+    }
+  }
+
   // Extraer imágenes de CDNs sin extensión en la URL (Uploadcare, Imgix, Cloudinary, etc.)
   // Patrón: dominio-cdn.com/{uuid}/ con transformaciones tipo /-/format/webp/
   const cdnMatches = html.matchAll(/https:\/\/(?:uploadcare\.[a-z.]+|[\w-]+\.cloudinary\.com|[\w-]+\.imgix\.net)\/[a-f0-9-]{36}\/[^"'\s)]*/gi);
