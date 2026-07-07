@@ -206,6 +206,7 @@ async function subirImagenesDrive(imagenes: string[], nombrePropiedad: string): 
       parents: [parentFolderId],
     },
     fields: 'id',
+    supportsAllDrives: true,
   });
   const carpetaId = folder.data.id!;
 
@@ -228,12 +229,14 @@ async function subirImagenesDrive(imagenes: string[], nombrePropiedad: string): 
         requestBody: { name: fileName, parents: [carpetaId] },
         media: { mimeType, body: Readable.from(Buffer.from(buffer)) },
         fields: 'id',
+        supportsAllDrives: true,
       });
 
       // Hacer pública la imagen
       await drive.permissions.create({
         fileId: file.data.id!,
         requestBody: { role: 'reader', type: 'anyone' },
+        supportsAllDrives: true,
       });
 
       const publicUrl = `/api/drive?id=${file.data.id}`;
