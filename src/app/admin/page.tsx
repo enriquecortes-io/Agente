@@ -124,7 +124,7 @@ export default function AdminPage() {
   }
   async function ingerirDesdeUrl() {
     setIngestando(true); setIngestResult(null);
-    try { const res=await fetch('/api/ingest',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:ingestUrl})}); setIngestResult(await res.json()); }
+    try { const endpoint = project === 'solena' ? '/api/solena/ingest' : '/api/ingest'; const res=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:ingestUrl})}); setIngestResult(await res.json()); }
     catch { setIngestResult({error:'Error en la ingesta'}); }
     setIngestando(false);
   }
