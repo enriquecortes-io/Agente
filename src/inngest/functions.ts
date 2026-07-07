@@ -1,6 +1,7 @@
 import { inngest } from './client.js';
 import { ingerirPropiedad } from '../tools/propertyIngestionTools.js';
 import { createClient } from '@supabase/supabase-js';
+import { ingerirPropiedadSolena } from '../tools/solenaIngestionTools.js';
 import { sendEmail, templateImpacto3 } from '../email.js';
 
 function getSupabase() {
@@ -96,5 +97,16 @@ export const procesarTemplado = inngest.createFunction(
     });
 
     return { success: true };
+  }
+);
+
+export const ingestPropertySolena = inngest.createFunction(
+  { id: 'ingest-property-solena', triggers: [{ event: 'solena/ingest' }] },
+  async ({ event, step }: any) => {
+    const { url, slug } = event.data;
+    const result = await step.run('ingerir-propiedad-solena', async () => {
+      return await ingerirPropiedadSolena(url, slug);
+    });
+    return result;
   }
 );
