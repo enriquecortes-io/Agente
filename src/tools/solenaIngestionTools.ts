@@ -24,8 +24,18 @@ function getDriveService() {
   return google.drive({ version: 'v3', auth });
 }
 
-// Subir imágenes a carpeta Solena en Drive
+// Para portales que bloquean fetch externo — guardar URLs directas sin subir a Drive
 async function subirImagenesDriveSolena(imagenes: string[], nombrePropiedad: string): Promise<string[]> {
+  // Intentar subir a Drive; si falla, devolver URLs originales
+  try {
+    return await subirImagenesDriveSolenaInternal(imagenes, nombrePropiedad);
+  } catch(e: any) {
+    console.log('[Solena Drive] Fallback a URLs directas:', e.message);
+    return imagenes.slice(0, 30);
+  }
+}
+
+async function subirImagenesDriveSolenaInternal(imagenes: string[], nombrePropiedad: string): Promise<string[]> {
   const drive = getDriveService();
   const parentFolderId = process.env.SOLENA_DRIVE_FOLDER_ID || '1Jl0EBNtcFt2HWIXwT08JjKGNUo8atgC4';
 
@@ -46,7 +56,15 @@ async function subirImagenesDriveSolena(imagenes: string[], nombrePropiedad: str
   for (let i = 0; i < Math.min(imagenes.length, 15); i++) {
     try {
       const imgRes = await fetch(imagenes[i], {
-        headers: { 'User-Agent': 'Mozilla/5.0', 'Referer': 'https://www.google.com' },
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Referer': 'https://inmoluxgroup.com/',
+          'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+          'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
+          'sec-fetch-dest': 'image',
+          'sec-fetch-mode': 'no-cors',
+          'sec-fetch-site': 'same-origin',
+        },
       });
       if (!imgRes.ok) continue;
 
