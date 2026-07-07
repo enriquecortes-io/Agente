@@ -174,11 +174,21 @@ export async function ingerirPropiedadSolena(url: string, slug?: string): Promis
     console.log(`[Solena] Primeras 3 URLs:`, datos.imagenes.slice(0, 3));
   }
 
-  const [descripcion, galeriaUrls] = await Promise.all([
-      generarDescripcion(datos),
-      subirImagenesDriveSolena(datos.imagenes, datos.titulo),
-    ]);
+  const descripcion = await generarDescripcion(datos);
 
+    let galeriaUrls: string[] = [];
+    try {
+      galeriaUrls = await subirImagenesDriveSolena(datos.imagenes, datos.titulo);
+    } catch(e: any) {
+      console.log('[Solena] Drive error:', e.message);
+    }
+
+    if (galeriaUrls.length === 0 && datos.imagenes.length > 0) {
+      console.log('[Solena] Fallback URLs directas:', datos.imagenes.length);
+      galeriaUrls = datos.imagenes.slice(0, 30);
+    }
+
+    console.log('[Solena] galeriaUrls final:', galeriaUrls.length);
     const propiedad = await insertarPropiedadSolena(datos, descripcion, galeriaUrls, slugFinal);
 
     console.log(`[Solena Ingestion] ✅ Completado: ${datos.titulo}`);
