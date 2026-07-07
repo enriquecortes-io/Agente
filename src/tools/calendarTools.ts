@@ -185,3 +185,70 @@ export function parsearIntentVisita(texto: string): Partial<VisitaData> | null {
 
   return resultado;
 }
+
+// ─── Cancelar evento ─────────────────────────────────────────
+export async function cancelarEvento(eventoId: string) {
+  try {
+    const calendar = getCalendarService();
+    await calendar.events.delete({
+      calendarId: 'enriquecortesgomez@gmail.com',
+      eventId: eventoId,
+    });
+    return { success: true, message: 'Evento cancelado correctamente.' };
+  } catch (error: any) {
+    console.error('[Calendar] Error cancelando:', error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+// ─── Mover evento ─────────────────────────────────────────────
+export async function moverEvento(eventoId: string, nuevaFecha: string, nuevaHora: string, duracionMinutos = 90) {
+  try {
+    const calendar = getCalendarService();
+    const inicio = new Date(`${nuevaFecha}T${nuevaHora}:00`);
+    const fin = new Date(inicio.getTime() + duracionMinutos * 60 * 1000);
+    const fmt = (d: Date) => d.toISOString().replace('Z', '').slice(0, 19) + '+02:00';
+
+    const res = await calendar.events.patch({
+      calendarId: 'enriquecortesgomez@gmail.com',
+      eventId: eventoId,
+      requestBody: {
+        start: { dateTime: fmt(inicio), timeZone: 'Europe/Madrid' },
+        end: { dateTime: fmt(fin), timeZone: 'Europe/Madrid' },
+      },
+    });
+
+    return {
+      success: true,
+      message: `Evento movido a ${nuevaFecha} a las ${nuevaHora}.`,
+      link: res.data.htmlLink,
+    };
+  } catch (error: any) {
+    console.error('[Calendar] Error moviendo:', error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+// ─── Buscar evento por título ──────────────────────────────────
+export async function buscarEventoPorTitulo(titulo: string) {
+  try {
+    const calendar = getCalendarService();
+    const hoy = new Date();
+    const enUnMes = new Date(hoy); enUnMes.setMonth(hoy.getMonth() + 1);
+
+    const res = await calendar.events.list({
+      calendarId: 'enriquecortesgomez@gmail.com',
+      q: titulo,
+      timeMin: new Date(hoy.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString(), // -7 días
+      timeMax: enUnMes.toISOString(),
+      singleEvents: true,
+      orderBy: 'startTime',
+      maxResults: 5,
+    });
+
+    return res.data.items || [];
+  } catch (error: any) {
+    console.error('[Calendar] Error buscando:', error.message);
+    return [];
+  }
+}
