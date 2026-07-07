@@ -50,6 +50,14 @@ export async function extraerDatosPropiedad(url: string) {
     });
   }
 
+  // Extraer imágenes WordPress — normalizar eliminando sufijos de tamaño "-NNNxNNN"
+  const wpMatches = html.matchAll(/https?:\/\/[^"'\s]+\/wp-content\/uploads\/[^"'\s]+\.(?:jpg|jpeg|png|webp)/gi);
+  for (const m of wpMatches) {
+    // Coger versión original eliminando sufijo de tamaño (-1024x622, etc.)
+    const original = m[0].replace(/-\d+x\d+(\.(?:jpg|jpeg|png|webp))$/, '$1');
+    imageSet.add(original);
+  }
+
   // Extraer imágenes de CDNs sin extensión en la URL (Uploadcare, Imgix, Cloudinary, etc.)
   // Patrón: dominio-cdn.com/{uuid}/ con transformaciones tipo /-/format/webp/
   const cdnMatches = html.matchAll(/https:\/\/(?:uploadcare\.[a-z.]+|[\w-]+\.cloudinary\.com|[\w-]+\.imgix\.net)\/[a-f0-9-]{36}\/[^"'\s)]*/gi);
@@ -74,24 +82,40 @@ export async function extraerDatosPropiedad(url: string) {
     .slice(0, 5000);
 
   // Extraer precio
-  const precioMatch = textoLimpio.match(/(\d[\d.,]+)\s*(?:€|EUR|euros?)/i);
-  const precio = precioMatch ? parseFloat(precioMatch[1].replace(/\./g, '').replace(',', '.')) : 0;
+  // Precio — soporta "€ 795 000", "795.000 €", "795,000€"
+  const precioMatch =
+    textoLimpio.match(/(?:€|EUR)\s*([\d][\d\s.,]+)/i) ||
+    textoLimpio.match(/Price\s*(?:€|EUR)?\s*([\d][\d\s.,]+)/i) ||
+    textoLimpio.match(/([\d][\d\s.,]+)\s*(?:€|EUR)/i);
+  const precio = precioMatch
+    ? parseFloat(precioMatch[1].replace(/\s/g, '').replace(/\./g, '').replace(',', '.'))
+    : 0;
 
   // Extraer habitaciones
-  const habMatch = textoLimpio.match(/(\d+)\s*(?:hab|bedroom|dormitor)/i);
+  // Habitaciones — buscar específicamente "Bedrooms N" o "N hab/dormitor"
+  const habMatch =
+    textoLimpio.match(/Bedrooms?\s*(\d+)/i) ||
+    textoLimpio.match(/(\d+)\s*(?:Bedrooms?|hab(?:itaciones?)?|dormitor)/i);
   const habitaciones = habMatch ? parseInt(habMatch[1]) : 0;
 
   // Extraer baños
-  const banosMatch = textoLimpio.match(/(\d+)\s*(?:ba[ñn]|bathroom|aseo)/i);
+  // Baños
+  const banosMatch =
+    textoLimpio.match(/Bathrooms?\s*(\d+)/i) ||
+    textoLimpio.match(/(\d+)\s*(?:Bathrooms?|ba[ñn]os?|aseos?)/i);
   const banos = banosMatch ? parseInt(banosMatch[1]) : 0;
 
   // Extraer m2
-  const m2Match = textoLimpio.match(/(\d+)\s*m[²2]/i);
+  // m2 — buscar Area N o N m²
+  const m2Match =
+    textoLimpio.match(/(?:Area|Built|interior|superficie)\s*(\d+)/i) ||
+    textoLimpio.match(/(\d+)\s*m[²2]/i);
   const m2 = m2Match ? parseInt(m2Match[1]) : 0;
 
   // Extraer título de la página
   const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
-  const titulo = titleMatch ? titleMatch[1].replace(/\s*[-|].*$/, '').trim() : 'Propiedad';
+  const tituloRaw = titleMatch ? titleMatch[1].replace(/\s*[-|–—].*$/, '').trim() : 'Propiedad';
+  const titulo = tituloRaw.replace(/&#\d+;/g, ' ').replace(/&[a-z]+;/g, ' ').replace(/\s+/g, ' ').trim();
 
   console.log(`[Ingestion] Extraído: ${titulo} | €${precio} | ${habitaciones}hab | ${imagenes.length} imágenes`);
 
