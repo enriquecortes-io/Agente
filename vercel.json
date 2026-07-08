@@ -1,8 +1,15 @@
 {
- "crons": [
-   {
-     "path": "/api/cron/seguimiento",
-     "schedule": "0 9 * * *"
-   }
- ]
+  "regions": ["mad1"],
+  "crons": [
+    {
+      "path": "/api/cron/seguimiento",
+      "schedule": "0 9 * * *"
+    }
+  ],
+  "functions": {
+    "src/app/api/ingest/route.ts": { "maxDuration": 300 },
+    "src/app/api/solena/ingest/route.ts": { "maxDuration": 300 },
+    "src/app/api/solena/upload-images/route.ts": { "maxDuration": 300 },
+    "src/app/api/inngest/route.ts": { "maxDuration": 300 }
+  }
 }
