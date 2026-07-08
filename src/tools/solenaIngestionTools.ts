@@ -56,18 +56,22 @@ async function subirImagenesDriveSolenaInternal(imagenes: string[], nombrePropie
 
   for (let i = 0; i < Math.min(imagenes.length, 15); i++) {
     try {
-      const imgRes = await fetch(imagenes[i], {
+      const imgUrl = imagenes[i];
+      const imgDomain = new URL(imgUrl).origin;
+      const imgRes = await fetch(imgUrl, {
         headers: {
           'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Referer': 'https://inmoluxgroup.com/',
-          'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
-          'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
+          'Referer': imgDomain + '/',
+          'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
           'sec-fetch-dest': 'image',
           'sec-fetch-mode': 'no-cors',
           'sec-fetch-site': 'same-origin',
         },
       });
-      if (!imgRes.ok) continue;
+      if (!imgRes.ok) {
+        console.log(`[Solena Drive] Skip ${i+1}: HTTP ${imgRes.status} — ${imgUrl.slice(0,80)}`);
+        continue;
+      }
 
       const buffer = await imgRes.arrayBuffer();
       const mimeType = imgRes.headers.get('content-type') || 'image/jpeg';
