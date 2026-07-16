@@ -58,6 +58,7 @@ export default function AdminPage() {
     if (tab === 'Análisis') fetchCompetencia();
     if (tab === 'Chat') fetchCalendar();
     if (tab === 'Contenido') fetchPublicaciones();
+    if (tab === 'Campañas') fetchEmailLeads();
   }, [tab, project]);
 
   async function fetchLeads() {
