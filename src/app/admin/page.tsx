@@ -50,6 +50,12 @@ export default function AdminPage() {
   const [emailLeads, setEmailLeads] = useState<any[]>([]);
   const [campaignFilter, setCampaignFilter] = useState('todos');
   const [campaignLoading, setCampaignLoading] = useState(false);
+  const [campanaTab, setCampanaTab] = useState<'editor'|'contactos'|'control'>('control');
+  const [campanaAsunto, setCampanaAsunto] = useState('');
+  const [campanaRemitente, setCampanaRemitente] = useState<'tem'|'solena'>('tem');
+  const [campanaHtml, setCampanaHtml] = useState('');
+  const [enviandoCampana, setEnviandoCampana] = useState(false);
+  const [campanaStats, setCampanaStats] = useState({total:0,pendiente:0,enviado:0,bounced:0});
 
   const accent = project === 'tem' ? TEM_GOLD : SOL_TERRA;
 
