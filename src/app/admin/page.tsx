@@ -46,6 +46,9 @@ export default function AdminPage() {
   const [calEvents, setCalEvents] = useState<any[]>([]);
   const [calLoading, setCalLoading] = useState(false);
   const [semanaInicio, setSemanaInicio] = useState<Date>(new Date());
+  const [emailLeads, setEmailLeads] = useState<any[]>([]);
+  const [campaignFilter, setCampaignFilter] = useState('todos');
+  const [campaignLoading, setCampaignLoading] = useState(false);
 
   const accent = project === 'tem' ? TEM_GOLD : SOL_TERRA;
 
@@ -159,6 +162,25 @@ export default function AdminPage() {
     input:focus,textarea:focus{border-color:${accent};}
     details>summary{list-style:none;cursor:pointer;} details>summary::-webkit-details-marker{display:none;}
   `;
+
+  async function fetchEmailLeads() {
+    try {
+      const res = await fetch('/api/admin/campanas');
+      const data = await res.json();
+      setEmailLeads(data.leads || []);
+    } catch(e) { console.error(e); }
+  }
+
+  async function enviarCampana() {
+    setCampaignLoading(true);
+    try {
+      const res = await fetch('/api/campaigns/send', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+      const data = await res.json();
+      alert(data.message || 'Campaña iniciada');
+      fetchEmailLeads();
+    } catch(e) { alert('Error: ' + e); }
+    setCampaignLoading(false);
+  }
 
   return (
     <>
