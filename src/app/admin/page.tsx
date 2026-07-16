@@ -59,6 +59,7 @@ export default function AdminPage() {
     if (tab === 'Chat') fetchCalendar();
     if (tab === 'Contenido') fetchPublicaciones();
     if (tab === 'Campañas') fetchEmailLeads();
+    if (tab === 'Campañas') fetchEmailLeads();
   }, [tab, project]);
 
   async function fetchLeads() {
