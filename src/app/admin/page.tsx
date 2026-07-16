@@ -18,6 +18,7 @@ const NAV = [
   { id: 'Ingestión', icon: '◎' },
   { id: 'Análisis',  icon: '◐' },
   { id: 'Contenido', icon: '◑' },
+  { id: 'Campañas',  icon: '◉' },
   { id: 'Chat',      icon: '◇' },
 ];
 
@@ -434,6 +435,38 @@ export default function AdminPage() {
             )}
 
             {/* CHAT */}
+            
+            {tab==='Campañas' && (
+              <div>
+                <div style={{fontSize:'10px',letterSpacing:'0.2em',color:'#888',textTransform:'uppercase',marginBottom:'24px'}}>Campañas de Email</div>
+                <div style={{display:'flex',gap:'12px',marginBottom:'24px'}}>
+                  <select value={campaignFilter} onChange={e=>setCampaignFilter(e.target.value)} style={{background:'#1a1a1a',border:'1px solid #333',borderRadius:'4px',padding:'8px 12px',color:'#ccc',fontSize:'12px',letterSpacing:'0.05em'}}>
+                    <option value='todos'>Todos ({emailLeads.length})</option>
+                    <option value='pendiente'>Pendientes ({emailLeads.filter((l:any)=>l.estado==='pendiente').length})</option>
+                    <option value='enviado'>Enviados ({emailLeads.filter((l:any)=>l.estado==='enviado').length})</option>
+                    <option value='bounced'>Bounced ({emailLeads.filter((l:any)=>l.estado==='bounced').length})</option>
+                  </select>
+                  <button onClick={enviarCampana} disabled={campaignLoading} style={{background:'none',border:'1px solid #555',borderRadius:'4px',padding:'8px 20px',color:'#ccc',fontSize:'12px',letterSpacing:'0.08em',cursor:'pointer'}}>
+                    {campaignLoading ? 'Enviando...' : '📤 Enviar Campaña'}
+                  </button>
+                </div>
+                <div style={{border:'1px solid #2a2a2a',borderRadius:'4px',overflow:'hidden'}}>
+                  <div style={{display:'grid',gridTemplateColumns:'2fr 3fr 1fr 1fr',padding:'10px 16px',background:'#161616',fontSize:'10px',letterSpacing:'0.15em',color:'#555',textTransform:'uppercase',borderBottom:'1px solid #2a2a2a'}}>
+                    <div>Nombre</div><div>Email</div><div>Estado</div><div>Fecha</div>
+                  </div>
+                  {emailLeads.filter((l:any)=>campaignFilter==='todos'||l.estado===campaignFilter).map((lead:any,i:number)=>(
+                    <div key={i} style={{display:'grid',gridTemplateColumns:'2fr 3fr 1fr 1fr',padding:'10px 16px',borderBottom:'1px solid #1e1e1e',fontSize:'12px',alignItems:'center'}}>
+                      <div style={{color:'#aaa'}}>{lead.nombre||'—'}</div>
+                      <div style={{color:'#666',fontSize:'11px'}}>{lead.email}</div>
+                      <div><span style={{padding:'2px 8px',borderRadius:'2px',fontSize:'10px',letterSpacing:'0.05em',background:lead.estado==='enviado'?'#0a2a1a':lead.estado==='bounced'?'#2a0a0a':'#2a2a0a',color:lead.estado==='enviado'?'#4a9a6a':lead.estado==='bounced'?'#9a4a4a':'#9a8a4a'}}>{lead.estado}</span></div>
+                      <div style={{color:'#444',fontSize:'11px'}}>{lead.enviado_at?new Date(lead.enviado_at).toLocaleDateString('es-ES'):'—'}</div>
+                    </div>
+                  ))}
+                  {emailLeads.length===0&&<div style={{padding:'32px',textAlign:'center',color:'#444',fontSize:'12px',letterSpacing:'0.1em'}}>No hay contactos cargados</div>}
+                </div>
+              </div>
+            )}
+
             {tab==='Chat' && (
               <div style={{display:'flex',flexDirection:'column',height:'calc(100vh - 160px)'}}>
                 <div style={{flex:1,overflowY:'auto',paddingBottom:'20px'}}>
