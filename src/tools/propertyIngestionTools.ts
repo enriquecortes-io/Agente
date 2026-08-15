@@ -91,25 +91,26 @@ export async function extraerDatosPropiedad(url: string) {
     // Usar Apify para bypassear Cloudflare
     // Usar Apify website-content-crawler (plan free)
     const runRes = await fetch(
-      `https://api.apify.com/v2/acts/apify~website-content-crawler/run-sync-get-dataset-items?token=${process.env.APIFY_API_KEY}&timeout=90`,
+      `https://api.apify.com/v2/acts/dtrungtin~cloudflare-web-scraper/run-sync-get-dataset-items?token=${process.env.APIFY_API_KEY}&timeout=120`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           startUrls: [{ url }],
-          maxCrawlPages: 1,
-          crawlerType: 'playwright:firefox',
-          saveHtml: true,
-          saveMarkdown: true,
+          proxyConfig: { useApifyProxy: true },
+          pageFunction: `async function pageFunction(context) {
+            const { $ } = context;
+            return { html: $.html(), url: context.request.url };
+          }`,
         }),
       }
     );
-    if (!runRes.ok) throw new Error('Apify run error: ' + runRes.status);
+    if (!runRes.ok) throw new Error('Apify Cloudflare-scraper error: ' + runRes.status);
     const items = await runRes.json();
-    console.log('[Ingestion] Apify item keys:', items?.[0] ? Object.keys(items[0]).join(', ') : 'sin items');
-    const apifyHtml = items?.[0]?.html || items?.[0]?.text || items?.[0]?.markdown || '';
-    if (!apifyHtml) throw new Error('Apify no devolvió contenido');
-    console.log('[Ingestion] ⚠️ Sitio con Cloudflare — Apify solo extrae texto, sin galería de imágenes. Súbelas manualmente en el admin.');
+    console.log('[Ingestion] Cloudflare-scraper item keys:', items?.[0] ? Object.keys(items[0]).join(', ') : 'sin items');
+    const apifyHtml = items?.[0]?.html || '';
+    if (!apifyHtml) throw new Error('Apify no devolvió HTML');
+    console.log('[Ingestion] HTML length:', apifyHtml.length);
     return extraerDatosDeHtml(apifyHtml, url);
   }
   const urlBase = new URL(url);
