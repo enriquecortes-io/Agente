@@ -91,26 +91,28 @@ export async function extraerDatosPropiedad(url: string) {
     // Usar Apify para bypassear Cloudflare
     // Usar Apify website-content-crawler (plan free)
     const runRes = await fetch(
-      `https://api.apify.com/v2/acts/dtrungtin~cloudflare-web-scraper/run-sync-get-dataset-items?token=${process.env.APIFY_API_KEY}&timeout=120`,
+      `https://api.apify.com/v2/acts/apify~website-content-crawler/run-sync-get-dataset-items?token=${process.env.APIFY_API_KEY}&timeout=90`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           startUrls: [{ url }],
-          proxyConfig: { useApifyProxy: true },
-          pageFunction: `async function pageFunction(context) {
-            const { $ } = context;
-            return { html: $.html(), url: context.request.url };
-          }`,
+          maxCrawlPages: 1,
+          crawlerType: 'playwright:firefox',
+          saveHtml: true,
+          htmlTransformer: 'none',
+          removeElementsCssSelector: 'dummy_keep_everything',
+          removeCookieWarnings: true,
+          dynamicContentWaitSecs: 5,
         }),
       }
     );
-    if (!runRes.ok) throw new Error('Apify Cloudflare-scraper error: ' + runRes.status);
+    if (!runRes.ok) throw new Error('Apify run error: ' + runRes.status);
     const items = await runRes.json();
-    console.log('[Ingestion] Cloudflare-scraper item keys:', items?.[0] ? Object.keys(items[0]).join(', ') : 'sin items');
+    console.log('[Ingestion] Apify item keys:', items?.[0] ? Object.keys(items[0]).join(', ') : 'sin items');
     const apifyHtml = items?.[0]?.html || '';
     if (!apifyHtml) throw new Error('Apify no devolvió HTML');
-    console.log('[Ingestion] HTML length:', apifyHtml.length);
+    console.log('[Ingestion] HTML length:', apifyHtml.length, '| imgs en html:', (apifyHtml.match(/<img/g) || []).length);
     return extraerDatosDeHtml(apifyHtml, url);
   }
   const urlBase = new URL(url);
