@@ -8,14 +8,15 @@ function getSupabase() {
 }
 
 function getDriveService() {
+  const privateKey = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n') || '';
   const auth = new google.auth.GoogleAuth({
     projectId: 'harvis-496912',
     credentials: {
       type: 'service_account',
       project_id: 'harvis-496912',
-      private_key: process.env.GOOGLE_PRIVATE_KEY,
-      client_email: process.env.GOOGLE_CLIENT_EMAIL,
-      client_id: process.env.GOOGLE_CLIENT_ID,
+      private_key: privateKey,
+      client_email: process.env.GOOGLE_CLIENT_EMAIL || 'harvis@harvis-496912.iam.gserviceaccount.com',
+      client_id: process.env.GOOGLE_CLIENT_ID || '102203927356076425365',
     } as any,
     scopes: ['https://www.googleapis.com/auth/drive'],
   });
@@ -23,13 +24,94 @@ function getDriveService() {
 }
 
 // 1. EXTRAER DATOS DE LA WEB
+function extraerDatosDeHtml(html: string, url: string) {
+  const urlBase = new URL(url);
+  
+  const imageSet = new Set<string>();
+  const srcMatches = html.matchAll(/(?:src|data-src|data-lazy)=["']([^"']+\.(jpg|jpeg|png|webp|avif)[^"']*)/gi);
+  for (const m of srcMatches) {
+    const imgUrl = m[1].startsWith('http') ? m[1] : `${urlBase.origin}${m[1].startsWith('/') ? '' : '/'}${m[1]}`;
+    imageSet.add(imgUrl.split('?')[0]);
+  }
+  const srcsetMatches = html.matchAll(/srcset=["']([^"']+)/gi);
+  for (const m of srcsetMatches) {
+    m[1].split(',').forEach((s: string) => {
+      const u = s.trim().split(' ')[0];
+      if (u.match(/\.(jpg|jpeg|png|webp|avif)/i)) {
+        const imgUrl = u.startsWith('http') ? u : `${urlBase.origin}${u.startsWith('/') ? '' : '/'}${u}`;
+        imageSet.add(imgUrl.split('?')[0]);
+      }
+    });
+  }
+  const cdnMatches = html.matchAll(/https:\/\/(?:uploadcare\.[a-z.]+|[\w-]+\.cloudinary\.com|[\w-]+\.imgix\.net)\/[a-f0-9-]{36}\/[^"'\s)]*/gi);
+  for (const m of cdnMatches) {
+    const base = m[0].split('/-/')[0];
+    imageSet.add(`${base}/-/format/jpeg/-/resize/2000x/-/quality/best/`);
+  }
+  const imagenes = Array.from(imageSet).filter((u: string) =>
+    !u.includes('icon') && !u.includes('logo') && !u.includes('favicon') &&
+    !u.includes('avatar') && !u.includes('spinner') && u.length > 20
+  );
+
+  const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i) || html.match(/<h1[^>]*>([^<]+)<\/h1>/i) || html.match(/^#\s+(.+)$/m);
+  const titulo = titleMatch ? titleMatch[1].replace(/\|.*$/, '').trim() : 'Propiedad';
+  const precioMatch = html.match(/[€$]\s*([\d.,]+(?:\.\d{3})*(?:,\d{2})?)/);
+  const precio = precioMatch ? (parseInt(precioMatch[1].replace(/\./g, '')) || 0) : 0;
+  const habMatch = html.match(/(\d+)\s*(?:hab|dormitorio|bedroom)/i);
+  const habitaciones = habMatch ? parseInt(habMatch[1]) : 0;
+  const m2Match = html.match(/(\d+)\s*m[²2]/i);
+  const m2 = m2Match ? parseInt(m2Match[1]) : 0;
+
+  const textoLimpio = html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 5000);
+  const banos = 0;
+  const urlOriginal = url;
+  return { titulo, precio, habitaciones, banos, m2, imagenes, textoLimpio, urlOriginal };
+}
+
 export async function extraerDatosPropiedad(url: string) {
   const res = await fetch(url, {
     headers: {
-      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+      'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
+      'Accept-Encoding': 'gzip, deflate, br',
+      'Cache-Control': 'no-cache',
+      'Pragma': 'no-cache',
+      'Sec-Fetch-Dest': 'document',
+      'Sec-Fetch-Mode': 'navigate',
+      'Sec-Fetch-Site': 'none',
+      'Sec-Fetch-User': '?1',
+      'Upgrade-Insecure-Requests': '1',
     },
   });
+  
   const html = await res.text();
+  if (html.includes('Just a moment') || html.includes('cf-browser-verification') || html.includes('Checking your browser')) {
+    console.log('[Ingestion] Cloudflare detectado — usando Apify...');
+    // Usar Apify para bypassear Cloudflare
+    // Usar Apify website-content-crawler (plan free)
+    const runRes = await fetch(
+      `https://api.apify.com/v2/acts/apify~website-content-crawler/run-sync-get-dataset-items?token=${process.env.APIFY_API_KEY}&timeout=90`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          startUrls: [{ url }],
+          maxCrawlPages: 1,
+          crawlerType: 'playwright:firefox',
+          saveHtml: true,
+          saveMarkdown: true,
+        }),
+      }
+    );
+    if (!runRes.ok) throw new Error('Apify run error: ' + runRes.status);
+    const items = await runRes.json();
+    console.log('[Ingestion] Apify item keys:', items?.[0] ? Object.keys(items[0]).join(', ') : 'sin items');
+    const apifyHtml = items?.[0]?.html || items?.[0]?.text || items?.[0]?.markdown || '';
+    if (!apifyHtml) throw new Error('Apify no devolvió contenido');
+    console.log('[Ingestion] ⚠️ Sitio con Cloudflare — Apify solo extrae texto, sin galería de imágenes. Súbelas manualmente en el admin.');
+    return extraerDatosDeHtml(apifyHtml, url);
+  }
   const urlBase = new URL(url);
 
   // Extraer imágenes — formato clásico (src/data-src/srcset con extensión)
