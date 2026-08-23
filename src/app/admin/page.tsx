@@ -71,9 +71,6 @@ export default function AdminPage() {
     if (tab === 'Campañas') fetchEmailLeads();
   }, [tab, project]);
 
-  useEffect(() => {
-    if (tab === 'Leads') fetchLeads(project);
-  }, [project]);
 
   async function fetchLeads(proj?: string) {
     const res = await fetch(`/api/admin/leads?project=${proj || project}&t=${Date.now()}`);
