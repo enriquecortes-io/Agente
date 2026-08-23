@@ -220,7 +220,16 @@ export default function AdminPage() {
   async function importLeads() {
     setLeadSaving(true);
     try {
-      const rows = importCsv.trim().split('\n').map(r => r.split(','));
+      const rows = importCsv.trim().split('\n').map(r => {
+        const parts = [];
+        let current = '';
+        let inQuotes = false;
+        for (const ch of r) {
+          else { current += ch; }
+        }
+        parts.push(current.trim());
+        return parts;
+      });
       const leads = rows.map(r => ({
         name: r[0]?.trim() || '',
         email: r[1]?.trim() || '',
