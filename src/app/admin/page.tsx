@@ -69,8 +69,11 @@ export default function AdminPage() {
     if (tab === 'Chat') fetchCalendar();
     if (tab === 'Contenido') fetchPublicaciones();
     if (tab === 'Campañas') fetchEmailLeads();
-    if (tab === 'Campañas') fetchEmailLeads();
   }, [tab, project]);
+
+  useEffect(() => {
+    if (tab === 'Leads') fetchLeads();
+  }, [project]);
 
   async function fetchLeads() {
     const res = await fetch(`/api/admin/leads?project=${project}`);
