@@ -25,3 +25,43 @@ export async function PATCH(req: Request) {
   if (error) return Response.json({ error: error.message }, { status: 500 });
   return Response.json({ success: true });
 }
+
+export async function POST(req: Request) {
+  const body = await req.json();
+  const project = body.proyecto || body.project || 'tem';
+  const supabase = getSupabase(project);
+
+  // Batch import
+  if (body.batch) {
+    const leads = body.batch.map((l: any) => ({ ...l, proyecto: project, fase: l.fase || 'nuevo' }));
+    const { error, count } = await supabase.from('leads').insert(leads);
+    if (error) return Response.json({ error: error.message }, { status: 500 });
+    return Response.json({ success: true, count: leads.length });
+  }
+
+  // Single insert
+  const { error } = await supabase.from('leads').insert({ ...body, fase: body.fase || 'nuevo' });
+  if (error) return Response.json({ error: error.message }, { status: 500 });
+  return Response.json({ success: true });
+}
+
+export async function PUT(req: Request) {
+  const body = await req.json();
+  const project = body.proyecto || body.project || 'tem';
+  const supabase = getSupabase(project);
+  const { id, ...data } = body;
+  const { error } = await supabase.from('leads').update(data).eq('id', id);
+  if (error) return Response.json({ error: error.message }, { status: 500 });
+  return Response.json({ success: true });
+}
+
+export async function DELETE(req: Request) {
+  const url = new URL(req.url);
+  const id = url.searchParams.get('id');
+  const project = url.searchParams.get('project') || 'tem';
+  const supabase = getSupabase(project);
+  if (!id) return Response.json({ error: 'Falta id' }, { status: 400 });
+  const { error } = await supabase.from('leads').delete().eq('id', id);
+  if (error) return Response.json({ error: error.message }, { status: 500 });
+  return Response.json({ success: true });
+}
