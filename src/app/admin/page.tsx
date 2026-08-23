@@ -220,8 +220,7 @@ export default function AdminPage() {
   async function importLeads() {
     setLeadSaving(true);
     try {
-      const rows = importCsv.trim().split('
-').map(r => r.split(','));
+      const rows = importCsv.trim().split('\n').map(r => r.split(','));
       const leads = rows.map(r => ({
         name: r[0]?.trim() || '',
         email: r[1]?.trim() || '',
@@ -341,16 +340,20 @@ export default function AdminPage() {
                     {(['todos','captacion','venta'] as const).map(f=>(
                       <button key={f} onClick={()=>setLeadFilter(f)} style={{background:leadFilter===f?SURFACE2:'none',border:`1px solid ${leadFilter===f?accent:BORDER}`,borderRadius:'4px',padding:'7px 14px',color:leadFilter===f?accent:MUTED,fontSize:'11px',letterSpacing:'0.1em',textTransform:'uppercase',cursor:'pointer'}}>
                         {f==='todos'?'Todos':f==='captacion'?'Captación':'Venta'}
-                        <span style={{marginLeft:'6px',opacity:0.6}}>({f==='todos'?leads.length:leads.filter(l=>l.tipo_lead===f).length})</span>
+                        <span style={{marginLeft:'6px',opacity:0.6}}>({f==='todos'?leads.length:leads.filter((l:any)=>l.tipo_lead===f).length})</span>
                       </button>
                     ))}
                   </div>
-                  <button onClick={fetchLeads} style={{background:'none',border:`1px solid ${BORDER}`,borderRadius:'4px',padding:'7px 14px',color:MUTED,fontSize:'11px',cursor:'pointer',letterSpacing:'0.05em'}}>↻ Actualizar</button>
+                  <div style={{display:'flex',gap:'6px'}}>
+                    <button onClick={()=>{setLeadEditData({tipo_lead:'venta',fase:'nuevo',temperatura:'frio'});setLeadModal('crear');}} style={{background:accent,color:DARK,border:'none',borderRadius:'4px',padding:'7px 14px',fontSize:'11px',letterSpacing:'0.1em',textTransform:'uppercase',cursor:'pointer',fontWeight:'500'}}>+ Nuevo</button>
+                    <button onClick={()=>setLeadModal('importar')} style={{background:'none',border:`1px solid ${BORDER}`,borderRadius:'4px',padding:'7px 14px',color:MUTED,fontSize:'11px',cursor:'pointer',letterSpacing:'0.05em'}}>↑ CSV</button>
+                    <button onClick={fetchLeads} style={{background:'none',border:`1px solid ${BORDER}`,borderRadius:'4px',padding:'7px 14px',color:MUTED,fontSize:'11px',cursor:'pointer'}}>↻</button>
+                  </div>
                 </div>
 
-                {filteredLeads.length===0&&<div style={{textAlign:'center',padding:'64px',color:MUTED,fontSize:'13px',letterSpacing:'0.05em'}}>Sin leads con este filtro</div>}
+                {filteredLeads.length===0&&<div style={{textAlign:'center',padding:'64px',color:MUTED,fontSize:'13px',letterSpacing:'0.05em'}}>Sin leads — pulsa "+ Nuevo" para añadir</div>}
 
-                {filteredLeads.map((lead,i)=>{
+                {filteredLeads.map((lead:any,i:number)=>{
                   const fase=lead.fase||'nuevo';
                   return (
                     <div key={i} style={{borderBottom:`1px solid ${BORDER}`,padding:'20px 0'}}>
@@ -363,28 +366,96 @@ export default function AdminPage() {
                           {lead.temperatura&&<span style={{fontSize:'10px',letterSpacing:'0.1em',textTransform:'uppercase',color:lead.temperatura==='caliente'?'#c0504a':accent,border:`1px solid ${lead.temperatura==='caliente'?'#c0504a':accent}30`,borderRadius:'3px',padding:'3px 8px'}}>{lead.temperatura}</span>}
                           {lead.tipo_lead&&<span style={{fontSize:'10px',letterSpacing:'0.1em',textTransform:'uppercase',color:MUTED,border:`1px solid ${BORDER}`,borderRadius:'3px',padding:'3px 8px'}}>{lead.tipo_lead}</span>}
                           <span style={{fontSize:'10px',letterSpacing:'0.1em',textTransform:'uppercase',color:faseColor[fase]||MUTED,border:`1px solid ${faseColor[fase]||MUTED}30`,borderRadius:'3px',padding:'3px 8px'}}>{faseLabel[fase]||fase}</span>
+                          <button onClick={()=>{setLeadEditData({...lead});setLeadModal('editar');}} style={{background:'none',border:`1px solid ${BORDER}`,borderRadius:'3px',padding:'4px 10px',color:MUTED,fontSize:'10px',cursor:'pointer'}}>Editar</button>
+                          <button onClick={()=>deleteLead(lead.id)} style={{background:'none',border:'1px solid #6a303030',borderRadius:'3px',padding:'4px 10px',color:'#9a4a4a',fontSize:'10px',cursor:'pointer'}}>✕</button>
                         </div>
                       </div>
                       {(lead.zona||lead.plazo_deseado||lead.precio_estimado)&&(
                         <div style={{display:'flex',gap:'24px',marginBottom:'14px'}}>
                           {lead.zona&&<div><span style={{fontSize:'10px',letterSpacing:'0.12em',color:MUTED,textTransform:'uppercase',display:'block',marginBottom:'2px'}}>Zona</span><span style={{fontSize:'13px',color:CREAM}}>{lead.zona}</span></div>}
                           {lead.plazo_deseado&&<div><span style={{fontSize:'10px',letterSpacing:'0.12em',color:MUTED,textTransform:'uppercase',display:'block',marginBottom:'2px'}}>Plazo</span><span style={{fontSize:'13px',color:CREAM}}>{lead.plazo_deseado}</span></div>}
-                          {lead.precio_estimado&&<div><span style={{fontSize:'10px',letterSpacing:'0.12em',color:MUTED,textTransform:'uppercase',display:'block',marginBottom:'2px'}}>Precio est.</span><span style={{fontSize:'13px',color:CREAM}}>{Number(lead.precio_estimado).toLocaleString('es-ES')}€</span></div>}
+                          {lead.precio_estimado&&<div><span style={{fontSize:'10px',letterSpacing:'0.12em',color:MUTED,textTransform:'uppercase',display:'block',marginBottom:'2px'}}>Precio</span><span style={{fontSize:'13px',color:CREAM}}>{Number(lead.precio_estimado).toLocaleString('es-ES')}€</span></div>}
                         </div>
                       )}
+                      {lead.notas&&<div style={{fontSize:'12px',color:MUTED,marginBottom:'12px',lineHeight:'1.6',borderLeft:`2px solid ${BORDER}`,paddingLeft:'10px'}}>{lead.notas}</div>}
                       <div style={{display:'flex',gap:'8px',flexWrap:'wrap' as const}}>
-                        {lead.email&&<a href={`mailto:${lead.email}`} style={{background:'none',border:`1px solid ${BORDER}`,borderRadius:'3px',padding:'5px 12px',color:MUTED,fontSize:'11px',letterSpacing:'0.05em',textDecoration:'none',cursor:'pointer'}}>Email →</a>}
+                        {lead.email&&<a href={`mailto:${lead.email}`} style={{background:'none',border:`1px solid ${BORDER}`,borderRadius:'3px',padding:'5px 12px',color:MUTED,fontSize:'11px',letterSpacing:'0.05em',textDecoration:'none'}}>Email →</a>}
                         {lead.phone&&<a href={`https://wa.me/${lead.phone.replace('+','')}`} target="_blank" style={{background:'none',border:`1px solid ${BORDER}`,borderRadius:'3px',padding:'5px 12px',color:MUTED,fontSize:'11px',letterSpacing:'0.05em',textDecoration:'none'}}>WhatsApp →</a>}
-                        {faseSig[fase]&&<button onClick={()=>updateLeadFase(lead.id,faseSig[fase])} disabled={updatingLead===lead.id} style={{background:'none',border:`1px solid ${accent}40`,borderRadius:'3px',padding:'5px 12px',color:accent,fontSize:'11px',letterSpacing:'0.05em',cursor:'pointer'}}>
-                          {updatingLead===lead.id?'...':'→ '+faseLabel[faseSig[fase]]}
-                        </button>}
+                        {faseSig[fase]&&<button onClick={()=>updateLeadFase(lead.id,faseSig[fase])} disabled={updatingLead===lead.id} style={{background:'none',border:`1px solid ${accent}40`,borderRadius:'3px',padding:'5px 12px',color:accent,fontSize:'11px',letterSpacing:'0.05em',cursor:'pointer'}}>{updatingLead===lead.id?'...':'→ '+faseLabel[faseSig[fase]]}</button>}
                         {fase!=='cerrado'&&<button onClick={()=>updateLeadFase(lead.id,'cerrado')} disabled={updatingLead===lead.id} style={{background:'none',border:`1px solid ${BORDER}`,borderRadius:'3px',padding:'5px 12px',color:MUTED,fontSize:'11px',letterSpacing:'0.05em',cursor:'pointer'}}>Cerrar</button>}
                       </div>
                     </div>
                   );
                 })}
+
+                {(leadModal==='crear'||leadModal==='editar')&&(
+                  <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.85)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center'}} onClick={e=>{if(e.target===e.currentTarget){setLeadModal(null);setLeadEditData({});}}}>
+                    <div style={{background:'#111',border:`1px solid ${BORDER}`,borderRadius:'6px',padding:'32px',width:'520px',maxHeight:'80vh',overflowY:'auto' as const}}>
+                      <div style={{fontSize:'11px',letterSpacing:'0.2em',color:MUTED,textTransform:'uppercase',marginBottom:'24px'}}>{leadModal==='crear'?'Nuevo Lead':'Editar Lead'}</div>
+                      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px',marginBottom:'12px'}}>
+                        {([['name','Nombre'],['email','Email'],['phone','Teléfono'],['zona','Zona'],['plazo_deseado','Plazo deseado'],['precio_estimado','Precio estimado']] as const).map(([field,label])=>(
+                          <div key={field}>
+                            <div style={{fontSize:'9px',letterSpacing:'0.15em',color:MUTED,textTransform:'uppercase',marginBottom:'5px'}}>{label}</div>
+                            <input value={leadEditData[field]||''} onChange={e=>setLeadEditData({...leadEditData,[field]:e.target.value})} style={{width:'100%',background:SURFACE2,border:`1px solid ${BORDER}`,borderRadius:'3px',padding:'7px 10px',color:CREAM,fontSize:'12px',boxSizing:'border-box' as const}} />
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'12px',marginBottom:'16px'}}>
+                        <div>
+                          <div style={{fontSize:'9px',letterSpacing:'0.15em',color:MUTED,textTransform:'uppercase',marginBottom:'5px'}}>Tipo</div>
+                          <select value={leadEditData.tipo_lead||'venta'} onChange={e=>setLeadEditData({...leadEditData,tipo_lead:e.target.value})} style={{width:'100%',background:SURFACE2,border:`1px solid ${BORDER}`,borderRadius:'3px',padding:'7px 10px',color:CREAM,fontSize:'12px'}}>
+                            <option value='venta'>Venta</option>
+                            <option value='captacion'>Captación</option>
+                          </select>
+                        </div>
+                        <div>
+                          <div style={{fontSize:'9px',letterSpacing:'0.15em',color:MUTED,textTransform:'uppercase',marginBottom:'5px'}}>Temperatura</div>
+                          <select value={leadEditData.temperatura||'frio'} onChange={e=>setLeadEditData({...leadEditData,temperatura:e.target.value})} style={{width:'100%',background:SURFACE2,border:`1px solid ${BORDER}`,borderRadius:'3px',padding:'7px 10px',color:CREAM,fontSize:'12px'}}>
+                            <option value='frio'>Frío</option>
+                            <option value='tibio'>Tibio</option>
+                            <option value='caliente'>Caliente</option>
+                          </select>
+                        </div>
+                        <div>
+                          <div style={{fontSize:'9px',letterSpacing:'0.15em',color:MUTED,textTransform:'uppercase',marginBottom:'5px'}}>Fase</div>
+                          <select value={leadEditData.fase||'nuevo'} onChange={e=>setLeadEditData({...leadEditData,fase:e.target.value})} style={{width:'100%',background:SURFACE2,border:`1px solid ${BORDER}`,borderRadius:'3px',padding:'7px 10px',color:CREAM,fontSize:'12px'}}>
+                            <option value='nuevo'>Nuevo</option>
+                            <option value='contactado'>Contactado</option>
+                            <option value='cualificado'>Cualificado</option>
+                            <option value='visita'>Visita</option>
+                            <option value='oferta'>Oferta</option>
+                            <option value='cerrado'>Cerrado</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div style={{marginBottom:'16px'}}>
+                        <div style={{fontSize:'9px',letterSpacing:'0.15em',color:MUTED,textTransform:'uppercase',marginBottom:'5px'}}>Notas</div>
+                        <textarea value={leadEditData.notas||''} onChange={e=>setLeadEditData({...leadEditData,notas:e.target.value})} rows={3} style={{width:'100%',background:SURFACE2,border:`1px solid ${BORDER}`,borderRadius:'3px',padding:'8px 10px',color:CREAM,fontSize:'12px',resize:'vertical' as const,boxSizing:'border-box' as const}} />
+                      </div>
+                      <div style={{display:'flex',gap:'8px',justifyContent:'flex-end'}}>
+                        <button onClick={()=>{setLeadModal(null);setLeadEditData({});}} style={{background:'none',border:`1px solid ${BORDER}`,borderRadius:'3px',padding:'8px 16px',color:MUTED,fontSize:'11px',cursor:'pointer'}}>Cancelar</button>
+                        <button onClick={saveLead} disabled={leadSaving} style={{background:accent,border:'none',borderRadius:'3px',padding:'8px 20px',color:DARK,fontSize:'11px',fontWeight:'600',cursor:'pointer'}}>{leadSaving?'Guardando...':'Guardar'}</button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {leadModal==='importar'&&(
+                  <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.85)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center'}} onClick={e=>{if(e.target===e.currentTarget)setLeadModal(null);}}>
+                    <div style={{background:'#111',border:`1px solid ${BORDER}`,borderRadius:'6px',padding:'32px',width:'520px'}}>
+                      <div style={{fontSize:'11px',letterSpacing:'0.2em',color:MUTED,textTransform:'uppercase',marginBottom:'12px'}}>Importar CSV</div>
+                      <div style={{fontSize:'12px',color:MUTED,marginBottom:'12px',lineHeight:'1.6'}}>Formato por línea: nombre, email, teléfono, zona, tipo_lead</div>
+                      <textarea value={importCsv} onChange={e=>setImportCsv(e.target.value)} rows={8} placeholder={'Juan García, juan@email.com, +34600000000, Marbella, venta'} style={{width:'100%',background:SURFACE2,border:`1px solid ${BORDER}`,borderRadius:'3px',padding:'10px',color:CREAM,fontSize:'11px',fontFamily:'monospace',resize:'vertical' as const,boxSizing:'border-box' as const,marginBottom:'16px'}} />
+                      <div style={{display:'flex',gap:'8px',justifyContent:'flex-end'}}>
+                        <button onClick={()=>setLeadModal(null)} style={{background:'none',border:`1px solid ${BORDER}`,borderRadius:'3px',padding:'8px 16px',color:MUTED,fontSize:'11px',cursor:'pointer'}}>Cancelar</button>
+                        <button onClick={importLeads} disabled={leadSaving||!importCsv.trim()} style={{background:accent,border:'none',borderRadius:'3px',padding:'8px 20px',color:DARK,fontSize:'11px',fontWeight:'600',cursor:'pointer'}}>{leadSaving?'Importando...':'Importar'}</button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
+
 
             {/* INGESTIÓN */}
             {tab==='Ingestión' && (
