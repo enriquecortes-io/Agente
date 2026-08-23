@@ -359,7 +359,7 @@ export default function AdminPage() {
                   <div style={{display:'flex',gap:'6px'}}>
                     <button onClick={()=>{setLeadEditData({tipo_lead:'venta',fase:'nuevo',temperatura:'frio'});setLeadModal('crear');}} style={{background:accent,color:DARK,border:'none',borderRadius:'4px',padding:'7px 14px',fontSize:'11px',letterSpacing:'0.1em',textTransform:'uppercase',cursor:'pointer',fontWeight:'500'}}>+ Nuevo</button>
                     <button onClick={()=>setLeadModal('importar')} style={{background:'none',border:`1px solid ${BORDER}`,borderRadius:'4px',padding:'7px 14px',color:MUTED,fontSize:'11px',cursor:'pointer',letterSpacing:'0.05em'}}>↑ CSV</button>
-                    <button onClick={fetchLeads} style={{background:'none',border:`1px solid ${BORDER}`,borderRadius:'4px',padding:'7px 14px',color:MUTED,fontSize:'11px',cursor:'pointer'}}>↻</button>
+                    <button onClick={()=>fetchLeads()} style={{background:'none',border:`1px solid ${BORDER}`,borderRadius:'4px',padding:'7px 14px',color:MUTED,fontSize:'11px',cursor:'pointer'}}>↻</button>
                   </div>
                 </div>
 
