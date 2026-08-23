@@ -76,7 +76,7 @@ export default function AdminPage() {
   }, [project]);
 
   async function fetchLeads(proj?: string) {
-    const res = await fetch(`/api/admin/leads?project=${proj || project}`);
+    const res = await fetch(`/api/admin/leads?project=${proj || project}&t=${Date.now()}`);
     const data = await res.json();
     setLeads(data.leads || []);
   }
