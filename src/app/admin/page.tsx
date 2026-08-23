@@ -72,11 +72,11 @@ export default function AdminPage() {
   }, [tab, project]);
 
   useEffect(() => {
-    if (tab === 'Leads') fetchLeads();
+    if (tab === 'Leads') fetchLeads(project);
   }, [project]);
 
-  async function fetchLeads() {
-    const res = await fetch(`/api/admin/leads?project=${project}`);
+  async function fetchLeads(proj?: string) {
+    const res = await fetch(`/api/admin/leads?project=${proj || project}`);
     const data = await res.json();
     setLeads(data.leads || []);
   }
