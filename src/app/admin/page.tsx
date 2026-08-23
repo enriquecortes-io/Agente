@@ -225,7 +225,7 @@ export default function AdminPage() {
         let current = '';
         let inQuotes = false;
         for (const ch of r) {
-          else { current += ch; }
+          if (ch === `"`){ inQuotes = !inQuotes; } else if (ch === "," && !inQuotes){ parts.push(current.trim()); current = ""; } else { current += ch; }
         }
         parts.push(current.trim());
         return parts;
