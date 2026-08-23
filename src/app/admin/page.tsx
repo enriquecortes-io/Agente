@@ -26,6 +26,10 @@ export default function AdminPage() {
   const [project, setProject] = useState<'tem'|'solena'>('tem');
   const [tab, setTab] = useState('Chat');
   const [leadFilter, setLeadFilter] = useState<'todos'|'captacion'|'venta'>('todos');
+  const [leadModal, setLeadModal] = useState<'crear'|'editar'|'importar'|null>(null);
+  const [leadEditData, setLeadEditData] = useState<any>({});
+  const [leadSaving, setLeadSaving] = useState(false);
+  const [importCsv, setImportCsv] = useState('');
   const [leads, setLeads] = useState<any[]>([]);
   const [competencia, setCompetencia] = useState<any[]>([]);
   const [publicaciones, setPublicaciones] = useState<any[]>([]);
@@ -189,6 +193,56 @@ export default function AdminPage() {
       fetchEmailLeads();
     } catch(e) { alert('Error: ' + e); }
     setCampaignLoading(false);
+  }
+
+  async function saveLead() {
+    setLeadSaving(true);
+    try {
+      const method = leadEditData.id ? 'PUT' : 'POST';
+      const res = await fetch('/api/admin/leads', {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...leadEditData, proyecto: project }),
+      });
+      await res.json();
+      setLeadModal(null);
+      setLeadEditData({});
+      fetchLeads();
+    } catch(e) { alert('Error: ' + e); }
+    setLeadSaving(false);
+  }
+
+  async function deleteLead(id: string) {
+    await fetch('/api/admin/leads?id=' + id, { method: 'DELETE' });
+    fetchLeads();
+  }
+
+  async function importLeads() {
+    setLeadSaving(true);
+    try {
+      const rows = importCsv.trim().split('
+').map(r => r.split(','));
+      const leads = rows.map(r => ({
+        name: r[0]?.trim() || '',
+        email: r[1]?.trim() || '',
+        phone: r[2]?.trim() || '',
+        zona: r[3]?.trim() || '',
+        tipo_lead: r[4]?.trim() || 'venta',
+        proyecto: project,
+        fase: 'nuevo',
+      })).filter(l => l.name || l.email);
+      const res = await fetch('/api/admin/leads', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ batch: leads }),
+      });
+      const data = await res.json();
+      alert('Importados: ' + (data.count || leads.length) + ' leads');
+      setLeadModal(null);
+      setImportCsv('');
+      fetchLeads();
+    } catch(e) { alert('Error: ' + e); }
+    setLeadSaving(false);
   }
 
   return (
