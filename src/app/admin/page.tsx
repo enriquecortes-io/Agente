@@ -718,40 +718,38 @@ export default function AdminPage() {
                   <input type='file' accept='video/*' id='vid-input' style={{display:'none'}} onChange={async (e) => {
                     const file = e.target.files?.[0];
                     if (!file) return;
-                    const video = document.createElement('video');
-                    video.src = URL.createObjectURL(file);
-                    video.muted = true;
-                    await new Promise(r => { video.onloadedmetadata = r; });
-                    const canvas = document.createElement('canvas');
-                    canvas.width = video.videoWidth;
-                    canvas.height = video.videoHeight;
-                    const stream = canvas.captureStream(30);
-                    const audioCtx = new AudioContext();
-                    const src = audioCtx.createMediaElementSource(video);
-                    const dest = audioCtx.createMediaStreamDestination();
-                    src.connect(dest);
-                    dest.stream.getAudioTracks().forEach(t => stream.addTrack(t));
-                    const recorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9,opus' });
-                    const chunks: BlobPart[] = [];
-                    recorder.ondataavailable = e => chunks.push(e.data);
-                    recorder.onstop = () => {
-                      const blob = new Blob(chunks, { type: 'video/webm' });
+                    const statusEl = document.getElementById('vid-status');
+                    if (statusEl) statusEl.textContent = 'Cargando FFmpeg...';
+                    try {
+                      const { FFmpeg } = await import('https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/esm/index.js' as any);
+                      const { fetchFile, toBlobURL } = await import('https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/dist/esm/index.js' as any);
+                      const ffmpeg = new FFmpeg();
+                      ffmpeg.on('progress', ({ progress }: any) => {
+                        if (statusEl) statusEl.textContent = `Convirtiendo... ${Math.round(progress * 100)}%`;
+                      });
+                      await ffmpeg.load({
+                        coreURL: await toBlobURL('https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm/ffmpeg-core.js', 'text/javascript'),
+                        wasmURL: await toBlobURL('https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm/ffmpeg-core.wasm', 'application/wasm'),
+                      });
+                      if (statusEl) statusEl.textContent = 'Procesando vídeo...';
+                      const ext = file.name.split('.').pop() || 'mp4';
+                      await ffmpeg.writeFile(`input.${ext}`, await fetchFile(file));
+                      await ffmpeg.exec(['-i', `input.${ext}`, '-c:v', 'libvpx-vp9', '-crf', '30', '-b:v', '0', '-c:a', 'libopus', 'output.webm']);
+                      const data = await ffmpeg.readFile('output.webm');
+                      const blob = new Blob([data], { type: 'video/webm' });
                       const a = document.createElement('a');
                       a.href = URL.createObjectURL(blob);
                       a.download = file.name.replace(/\.[^.]+$/, '') + '.webm';
                       a.click();
-                    };
-                    video.play();
-                    recorder.start();
-                    const ctx2 = canvas.getContext('2d')!;
-                    const draw = () => { if (video.ended || video.paused) { recorder.stop(); return; } ctx2.drawImage(video, 0, 0); requestAnimationFrame(draw); };
-                    draw();
-                    await new Promise(r => { video.onended = r; });
+                      if (statusEl) statusEl.textContent = '✅ Conversión completada';
+                    } catch (err: any) {
+                      if (statusEl) statusEl.textContent = '❌ Error: ' + err.message;
+                    }
                   }} />
                   <button onClick={()=>document.getElementById('vid-input')?.click()} style={{background:'none',border:'1px solid #333',borderRadius:'4px',padding:'9px 18px',color:'#aaa',fontSize:'11px',letterSpacing:'0.08em',cursor:'pointer'}}>
                     Seleccionar vídeo → Convertir a WebM
                   </button>
-                  <div style={{fontSize:'11px',color:'#444',marginTop:'10px'}}>Conversión en tiempo real en el navegador · Sin subida al servidor · Calidad VP9</div>
+                  <div id='vid-status' style={{fontSize:'12px',color:'#666',marginTop:'10px'}}>FFmpeg.wasm · Conversión local sin servidor · Compatible con todos los navegadores</div>
                 </div>
 
                 {/* WEBM a MP4 info */}
