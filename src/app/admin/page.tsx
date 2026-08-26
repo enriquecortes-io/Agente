@@ -749,7 +749,7 @@ export default function AdminPage() {
                       await ffmpeg.writeFile(`input.${ext}`, await fetchFile(file));
                       await ffmpeg.exec(['-i', `input.${ext}`, '-c:v', 'libvpx-vp9', '-crf', '30', '-b:v', '0', '-c:a', 'libopus', 'output.webm']);
                       const data = await ffmpeg.readFile('output.webm');
-                      const blob = new Blob([data], { type: 'video/webm' });
+                      const blob = new Blob([data as any], { type: 'video/webm' });
                       const a = document.createElement('a');
                       a.href = URL.createObjectURL(blob);
                       a.download = file.name.replace(/\.[^.]+$/, '') + '.webm';
