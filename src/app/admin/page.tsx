@@ -53,6 +53,9 @@ export default function AdminPage() {
   const [calLoading, setCalLoading] = useState(false);
   const [semanaInicio, setSemanaInicio] = useState<Date>(new Date());
   const [emailLeads, setEmailLeads] = useState<any[]>([]);
+  const [convProgress, setConvProgress] = useState(0);
+  const [convStatus, setConvStatus] = useState<'idle'|'loading'|'converting'|'done'|'error'>('idle');
+  const [convMessage, setConvMessage] = useState('');
   const [campaignFilter, setCampaignFilter] = useState('todos');
   const [campaignLoading, setCampaignLoading] = useState(false);
   const [campanaTab, setCampanaTab] = useState<'editor'|'contactos'|'control'>('control');
@@ -721,11 +724,40 @@ export default function AdminPage() {
                     const statusEl = document.getElementById('vid-status');
                     if (statusEl) statusEl.textContent = 'Cargando FFmpeg...';
                     try {
-                      const { FFmpeg } = await import('https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/esm/index.js' as any);
-                      const { fetchFile, toBlobURL } = await import('https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/dist/esm/index.js' as any);
+                      // Cargar FFmpeg vía script tag global (evita bundling de Next.js)
+                      if (!(window as any).FFmpegWASM) {
+                        await new Promise<void>((resolve, reject) => {
+                          const s = document.createElement('script');
+                          s.src = 'https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js';
+                          s.onload = () => resolve();
+                          s.onerror = reject;
+                          document.head.appendChild(s);
+                        });
+                      }
+                      if (!(window as any).FFmpegUtil) {
+                        await new Promise<void>((resolve, reject) => {
+                          const s = document.createElement('script');
+                          s.src = 'https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/index.js';
+                          s.onload = () => resolve();
+                          s.onerror = reject;
+                          document.head.appendChild(s);
+                        });
+                      }
+                      const { FFmpeg } = (window as any).FFmpegWASM;
+                      const { fetchFile, toBlobURL } = (window as any).FFmpegUtil;
                       const ffmpeg = new FFmpeg();
+                      const bar = document.getElementById('vid-progress-bar');
+                      const fill = document.getElementById('vid-progress-fill');
+                      if (bar) bar.style.display = 'block';
                       ffmpeg.on('progress', ({ progress }: any) => {
-                        if (statusEl) statusEl.textContent = `Convirtiendo... ${Math.round(progress * 100)}%`;
+                        const pct = Math.min(100, Math.round(progress * 100));
+                        if (statusEl) statusEl.textContent = `Convirtiendo... ${pct}%`;
+                        if (fill) fill.style.width = pct + '%';
+                      });
+                      ffmpeg.on('log', ({ message }: any) => {
+                        if (message.includes('Error') || message.includes('error')) {
+                          if (statusEl) statusEl.textContent = '⚠ ' + message.slice(0, 80);
+                        }
                       });
                       await ffmpeg.load({
                         coreURL: await toBlobURL('https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm/ffmpeg-core.js', 'text/javascript'),
@@ -741,15 +773,22 @@ export default function AdminPage() {
                       a.href = URL.createObjectURL(blob);
                       a.download = file.name.replace(/\.[^.]+$/, '') + '.webm';
                       a.click();
-                      if (statusEl) statusEl.textContent = '✅ Conversión completada';
+                      if (statusEl) statusEl.textContent = '✅ Conversión completada — descarga iniciada';
+                      if (fill) fill.style.width = '100%';
+                      setTimeout(() => { if (bar) bar.style.display = 'none'; if (fill) fill.style.width = '0%'; }, 3000);
                     } catch (err: any) {
                       if (statusEl) statusEl.textContent = '❌ Error: ' + err.message;
+                      const bar2 = document.getElementById('vid-progress-bar');
+                      if (bar2) bar2.style.display = 'none';
                     }
                   }} />
                   <button onClick={()=>document.getElementById('vid-input')?.click()} style={{background:'none',border:'1px solid #333',borderRadius:'4px',padding:'9px 18px',color:'#aaa',fontSize:'11px',letterSpacing:'0.08em',cursor:'pointer'}}>
                     Seleccionar vídeo → Convertir a WebM
                   </button>
                   <div id='vid-status' style={{fontSize:'12px',color:'#666',marginTop:'10px'}}>FFmpeg.wasm · Conversión local sin servidor · Compatible con todos los navegadores</div>
+                  <div id='vid-progress-bar' style={{width:'100%',height:'4px',background:'#1a1a1a',borderRadius:'2px',marginTop:'10px',overflow:'hidden',display:'none'}}>
+                    <div id='vid-progress-fill' style={{width:'0%',height:'100%',background:accent,transition:'width 0.2s'}}></div>
+                  </div>
                 </div>
 
                 {/* WEBM a MP4 info */}
