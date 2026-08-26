@@ -758,7 +758,8 @@ export default function AdminPage() {
                       if (fill) fill.style.width = '100%';
                       setTimeout(() => { if (bar) bar.style.display = 'none'; if (fill) fill.style.width = '0%'; }, 3000);
                     } catch (err: any) {
-                      if (statusEl) statusEl.textContent = '❌ Error: ' + err.message;
+                      console.error('FFmpeg error completo:', err);
+                      if (statusEl) statusEl.textContent = '❌ Error: ' + (err?.message || err?.toString() || JSON.stringify(err) || 'desconocido');
                       const bar2 = document.getElementById('vid-progress-bar');
                       if (bar2) bar2.style.display = 'none';
                     }
