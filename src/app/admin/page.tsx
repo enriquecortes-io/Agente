@@ -724,27 +724,8 @@ export default function AdminPage() {
                     const statusEl = document.getElementById('vid-status');
                     if (statusEl) statusEl.textContent = 'Cargando FFmpeg...';
                     try {
-                      // Cargar FFmpeg vía módulo ESM inyectado (más fiable que UMD)
-                      if (!(window as any).__ffmpegModule) {
-                        const moduleCode = `
-                          import { FFmpeg } from 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/esm/index.js';
-                          import { fetchFile, toBlobURL } from 'https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/dist/esm/index.js';
-                          window.__ffmpegModule = { FFmpeg, fetchFile, toBlobURL };
-                          window.dispatchEvent(new Event('ffmpeg-module-ready'));
-                        `;
-                        const blob = new Blob([moduleCode], { type: 'text/javascript' });
-                        const scriptUrl = URL.createObjectURL(blob);
-                        await new Promise<void>((resolve, reject) => {
-                          const timeout = setTimeout(() => reject(new Error('Timeout cargando módulo FFmpeg (15s)')), 15000);
-                          window.addEventListener('ffmpeg-module-ready', () => { clearTimeout(timeout); resolve(); }, { once: true });
-                          const s = document.createElement('script');
-                          s.type = 'module';
-                          s.src = scriptUrl;
-                          s.onerror = () => { clearTimeout(timeout); reject(new Error('Error cargando script módulo FFmpeg')); };
-                          document.head.appendChild(s);
-                        });
-                      }
-                      const { FFmpeg, fetchFile, toBlobURL } = (window as any).__ffmpegModule;
+                      const { FFmpeg } = await import('@ffmpeg/ffmpeg');
+                      const { fetchFile, toBlobURL } = await import('@ffmpeg/util');
                       const ffmpeg = new FFmpeg();
                       const bar = document.getElementById('vid-progress-bar');
                       const fill = document.getElementById('vid-progress-fill');
