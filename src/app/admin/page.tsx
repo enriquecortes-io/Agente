@@ -19,6 +19,7 @@ const NAV = [
   { id: 'Análisis',  icon: '◐' },
   { id: 'Contenido', icon: '◑' },
   { id: 'Campañas',  icon: '◉' },
+  { id: 'Conversión', icon: '◈' },
   { id: 'Chat',      icon: '◇' },
 ];
 
@@ -669,6 +670,101 @@ export default function AdminPage() {
                 )}
               </div>
             )}
+
+            {tab==='Conversión' && (
+              <div>
+                <div style={{fontSize:'10px',letterSpacing:'0.2em',color:'#888',textTransform:'uppercase',marginBottom:'24px'}}>Conversión de Archivos</div>
+                
+                {/* FOTOS */}
+                <div style={{background:'#111',border:'1px solid #1e1e1e',borderRadius:'4px',padding:'24px',marginBottom:'16px'}}>
+                  <div style={{fontSize:'10px',letterSpacing:'0.15em',color:'#555',textTransform:'uppercase',marginBottom:'16px'}}>🖼 Imágenes — JPG / PNG ↔ WebP</div>
+                  <input type='file' accept='image/*' multiple id='img-input' style={{display:'none'}} onChange={async (e) => {
+                    const files = Array.from(e.target.files || []);
+                    for (const file of files) {
+                      const img = new Image();
+                      const url = URL.createObjectURL(file);
+                      img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        canvas.width = img.width;
+                        canvas.height = img.height;
+                        const ctx = canvas.getContext('2d')!;
+                        ctx.drawImage(img, 0, 0);
+                        const isWebp = file.name.endsWith('.webp');
+                        const outType = isWebp ? 'image/jpeg' : 'image/webp';
+                        const outExt = isWebp ? 'jpg' : 'webp';
+                        canvas.toBlob((blob) => {
+                          if (!blob) return;
+                          const a = document.createElement('a');
+                          a.href = URL.createObjectURL(blob);
+                          a.download = file.name.replace(/\.[^.]+$/, '') + '.' + outExt;
+                          a.click();
+                        }, outType, 0.92);
+                        URL.revokeObjectURL(url);
+                      };
+                      img.src = url;
+                    }
+                  }} />
+                  <div style={{display:'flex',gap:'8px',flexWrap:'wrap' as const}}>
+                    <button onClick={()=>document.getElementById('img-input')?.click()} style={{background:'none',border:'1px solid #333',borderRadius:'4px',padding:'9px 18px',color:'#aaa',fontSize:'11px',letterSpacing:'0.08em',cursor:'pointer'}}>
+                      Seleccionar imágenes → Convertir y descargar
+                    </button>
+                  </div>
+                  <div style={{fontSize:'11px',color:'#444',marginTop:'10px'}}>JPG/PNG → WebP · WebP → JPG · Conversión automática según el formato de entrada</div>
+                </div>
+
+                {/* VIDEOS */}
+                <div style={{background:'#111',border:'1px solid #1e1e1e',borderRadius:'4px',padding:'24px',marginBottom:'16px'}}>
+                  <div style={{fontSize:'10px',letterSpacing:'0.15em',color:'#555',textTransform:'uppercase',marginBottom:'16px'}}>🎬 Vídeo — MP4 / MOV → WebM</div>
+                  <input type='file' accept='video/*' id='vid-input' style={{display:'none'}} onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const video = document.createElement('video');
+                    video.src = URL.createObjectURL(file);
+                    video.muted = true;
+                    await new Promise(r => { video.onloadedmetadata = r; });
+                    const canvas = document.createElement('canvas');
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    const stream = canvas.captureStream(30);
+                    const audioCtx = new AudioContext();
+                    const src = audioCtx.createMediaElementSource(video);
+                    const dest = audioCtx.createMediaStreamDestination();
+                    src.connect(dest);
+                    dest.stream.getAudioTracks().forEach(t => stream.addTrack(t));
+                    const recorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9,opus' });
+                    const chunks: BlobPart[] = [];
+                    recorder.ondataavailable = e => chunks.push(e.data);
+                    recorder.onstop = () => {
+                      const blob = new Blob(chunks, { type: 'video/webm' });
+                      const a = document.createElement('a');
+                      a.href = URL.createObjectURL(blob);
+                      a.download = file.name.replace(/\.[^.]+$/, '') + '.webm';
+                      a.click();
+                    };
+                    video.play();
+                    recorder.start();
+                    const ctx2 = canvas.getContext('2d')!;
+                    const draw = () => { if (video.ended || video.paused) { recorder.stop(); return; } ctx2.drawImage(video, 0, 0); requestAnimationFrame(draw); };
+                    draw();
+                    await new Promise(r => { video.onended = r; });
+                  }} />
+                  <button onClick={()=>document.getElementById('vid-input')?.click()} style={{background:'none',border:'1px solid #333',borderRadius:'4px',padding:'9px 18px',color:'#aaa',fontSize:'11px',letterSpacing:'0.08em',cursor:'pointer'}}>
+                    Seleccionar vídeo → Convertir a WebM
+                  </button>
+                  <div style={{fontSize:'11px',color:'#444',marginTop:'10px'}}>Conversión en tiempo real en el navegador · Sin subida al servidor · Calidad VP9</div>
+                </div>
+
+                {/* WEBM a MP4 info */}
+                <div style={{background:'#0d0d0d',border:'1px solid #1a1a1a',borderRadius:'4px',padding:'16px'}}>
+                  <div style={{fontSize:'10px',letterSpacing:'0.15em',color:'#444',textTransform:'uppercase',marginBottom:'8px'}}>Nota</div>
+                  <div style={{fontSize:'12px',color:'#444',lineHeight:'1.7'}}>
+                    WebM → MP4 requiere FFmpeg — disponible próximamente.<br/>
+                    Para convertir WebM a MP4 ahora: usa <span style={{color:'#666'}}>ffmpeg -i input.webm output.mp4</span> en terminal.
+                  </div>
+                </div>
+              </div>
+            )}
+
 
             {tab==='Chat' && (
               <div style={{display:'flex',flexDirection:'column',height:'calc(100vh - 160px)'}}>
