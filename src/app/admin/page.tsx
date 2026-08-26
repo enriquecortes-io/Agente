@@ -1,5 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
+import { FFmpeg } from '@ffmpeg/ffmpeg';
+import { fetchFile, toBlobURL } from '@ffmpeg/util';
 
 const DARK = '#111111';
 const SURFACE = '#1e1e1e';
@@ -724,8 +726,6 @@ export default function AdminPage() {
                     const statusEl = document.getElementById('vid-status');
                     if (statusEl) statusEl.textContent = 'Cargando FFmpeg...';
                     try {
-                      const { FFmpeg } = await import('@ffmpeg/ffmpeg');
-                      const { fetchFile, toBlobURL } = await import('@ffmpeg/util');
                       const ffmpeg = new FFmpeg();
                       const bar = document.getElementById('vid-progress-bar');
                       const fill = document.getElementById('vid-progress-fill');
