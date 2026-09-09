@@ -664,7 +664,7 @@ export default function AdminPage() {
                     </div>
                       <textarea value={campanaHtml} onChange={e=>setCampanaHtml(e.target.value)} placeholder='Pega aquí el HTML del email...' style={{width:'100%',background:'#0d0d0d',border:'1px solid #1e1e1e',borderRadius:'4px',padding:'12px',color:'#777',fontSize:'11px',fontFamily:'monospace',height:'300px',resize:'vertical' as const,boxSizing:'border-box' as const}} />
                     </div>
-                    {campanaHtml && (
+                    {campanaHtml && campanaHtml.length < 500000 && (
                       <div style={{background:'#111',border:'1px solid #1e1e1e',borderRadius:'4px',padding:'20px'}}>
                         <div style={{fontSize:'9px',letterSpacing:'0.2em',color:'#444',textTransform:'uppercase',marginBottom:'12px'}}>Preview</div>
                         <div style={{background:'#fff',borderRadius:'4px',overflow:'hidden'}}>
