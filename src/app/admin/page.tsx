@@ -62,7 +62,7 @@ export default function AdminPage() {
   const [campaignLoading, setCampaignLoading] = useState(false);
   const [campanaTab, setCampanaTab] = useState<'editor'|'contactos'|'control'>('control');
   const [campanaAsunto, setCampanaAsunto] = useState('');
-  const [campanaRemitente, setCampanaRemitente] = useState<'tem'|'solena'>('tem');
+  const [campanaRemitente, setCampanaRemitente] = useState<'tem'|'solena'|'smc'>('tem');
   const [campanaHtml, setCampanaHtml] = useState('');
   const [enviandoCampana, setEnviandoCampana] = useState(false);
   const [campanaStats, setCampanaStats] = useState({total:0,pendiente:0,enviado:0,bounced:0});
@@ -626,6 +626,7 @@ export default function AdminPage() {
                           <select value={campanaRemitente} onChange={e=>setCampanaRemitente(e.target.value as any)} style={{width:'100%',background:'#0d0d0d',border:'1px solid #2a2a2a',borderRadius:'4px',padding:'8px',color:'#777',fontSize:'11px'}}>
                             <option value='tem'>The Edit Marbella — info@theeditmarbella.com</option>
                             <option value='solena'>Solena Inmobiliaria — info@solenainmo.es</option>
+                            <option value='smc'>Santamaría Collection — info@santamaria-collection.com</option>
                           </select>
                         </div>
                         <div>
