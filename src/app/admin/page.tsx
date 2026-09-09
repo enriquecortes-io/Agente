@@ -658,7 +658,7 @@ export default function AdminPage() {
                           reader.readAsText(file);
                         }} />
                         <button onClick={()=>document.getElementById('html-file-input')?.click()} style={{background:'none',border:'1px solid #2a2a2a',borderRadius:'3px',padding:'5px 12px',color:'#555',fontSize:'10px',letterSpacing:'0.08em',cursor:'pointer'}}>
-                          📎 Subir archivo HTML
+                          📎 Subir HTML o ZIP
                         </button>
                       </div>
                     </div>
