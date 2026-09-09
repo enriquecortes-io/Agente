@@ -26,7 +26,7 @@ const NAV = [
 ];
 
 export default function AdminPage() {
-  const [project, setProject] = useState<'tem'|'solena'>('tem');
+  const [project, setProject] = useState<'tem'|'solena'|'smc'>('tem');
   const [tab, setTab] = useState('Chat');
   const [leadFilter, setLeadFilter] = useState<'todos'|'captacion'|'venta'>('todos');
   const [leadModal, setLeadModal] = useState<'crear'|'editar'|'importar'|null>(null);
@@ -67,7 +67,8 @@ export default function AdminPage() {
   const [enviandoCampana, setEnviandoCampana] = useState(false);
   const [campanaStats, setCampanaStats] = useState({total:0,pendiente:0,enviado:0,bounced:0});
 
-  const accent = project === 'tem' ? TEM_GOLD : SOL_TERRA;
+  const SMC_BLUE = '#1B3A5C';
+  const accent = project === 'tem' ? TEM_GOLD : project === 'solena' ? SOL_TERRA : SMC_BLUE;
 
   useEffect(() => {
     if (tab === 'Leads') fetchLeads();
@@ -276,9 +277,9 @@ export default function AdminPage() {
           <div style={{padding:'0 20px 28px',borderBottom:`1px solid ${BORDER}`}}>
             <div style={{fontSize:'10px',letterSpacing:'0.15em',color:MUTED,textTransform:'uppercase',marginBottom:'10px'}}>Proyecto</div>
             <div style={{display:'flex',flexDirection:'column',gap:'4px'}}>
-              {(['tem','solena'] as const).map(p=>(
+              {(['tem','solena','smc'] as const).map(p=>(
                 <button key={p} onClick={()=>setProject(p)} style={{background:project===p?SURFACE2:'transparent',border:`1px solid ${project===p?accent:BORDER}`,borderRadius:'4px',padding:'8px 12px',cursor:'pointer',textAlign:'left',color:project===p?accent:MUTED,fontSize:'12px',letterSpacing:'0.08em',transition:'all 0.2s'}}>
-                  {p==='tem'?'The Edit Marbella':'Solena Inmobiliaria'}
+                  {p==='tem'?'The Edit Marbella':p==='solena'?'Solena Inmobiliaria':'Santamaría Collection'}
                 </button>
               ))}
             </div>
@@ -314,7 +315,7 @@ export default function AdminPage() {
           <div style={{padding:'24px 40px 20px',borderBottom:`1px solid ${BORDER}`,display:'flex',justifyContent:'space-between',alignItems:'center',flexShrink:0}}>
             <div>
               <div style={{fontSize:'10px',letterSpacing:'0.2em',color:MUTED,textTransform:'uppercase',marginBottom:'4px'}}>{tab}</div>
-              <div style={{fontSize:'20px',fontWeight:'300',letterSpacing:'0.05em',color:CREAM}}>{project==='tem'?'The Edit Marbella':'Solena Inmobiliaria'}</div>
+              <div style={{fontSize:'20px',fontWeight:'300',letterSpacing:'0.05em',color:CREAM}}>{project==='tem'?'The Edit Marbella':project==='solena'?'Solena Inmobiliaria':'Santamaría Collection'}</div>
             </div>
             <div style={{fontSize:'11px',color:MUTED,letterSpacing:'0.05em'}}>{new Date().toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'long'})}</div>
           </div>
