@@ -652,7 +652,7 @@ export default function AdminPage() {
                       <div>
                         <input type='file' accept='.html,.htm' id='html-file-input' style={{display:'none'}} onChange={(e)=>{
                           const file = e.target.files?.[0];
-                          if (files.forEach(file => {) return;
+                          if (!file) return;
                           const reader = new FileReader();
                           reader.onload = (ev) => setCampanaHtml(ev.target?.result as string || '');
                           reader.readAsText(file);
