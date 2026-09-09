@@ -185,7 +185,7 @@ export default function AdminPage() {
 
   async function fetchEmailLeads() {
     try {
-      const res = await fetch('/api/admin/campanas');
+      const res = await fetch('/api/admin/campanas?project=' + project + '&t=' + Date.now());
       const data = await res.json();
       setEmailLeads(data.leads || []);
     } catch(e) { console.error(e); }
