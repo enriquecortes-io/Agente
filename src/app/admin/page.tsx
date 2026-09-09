@@ -654,15 +654,21 @@ export default function AdminPage() {
                           const file = e.target.files?.[0];
                           if (!file) return;
                           if (file.name.toLowerCase().endsWith('.zip')) {
+                            const statusEl = document.getElementById('zip-upload-status');
+                            if (statusEl) { statusEl.textContent = '⏳ Subiendo y procesando ZIP...'; statusEl.style.display = 'block'; }
                             const fd = new FormData();
                             fd.append('file', file);
                             try {
                               const res = await fetch('/api/campaigns/upload-zip', { method: 'POST', body: fd });
                               const data = await res.json();
-                              if (data.html) setCampanaHtml(data.html);
-                              else alert('Error: ' + (data.error || 'desconocido'));
+                              if (data.html) {
+                                setCampanaHtml(data.html);
+                                if (statusEl) statusEl.textContent = `✅ Procesado — ${data.imageCount || 0} imágenes incrustadas`;
+                              } else {
+                                if (statusEl) statusEl.textContent = '❌ Error: ' + (data.error || 'desconocido');
+                              }
                             } catch (err: any) {
-                              alert('Error subiendo ZIP: ' + err.message);
+                              if (statusEl) statusEl.textContent = '❌ Error de red: ' + err.message;
                             }
                           } else {
                             const reader = new FileReader();
@@ -673,6 +679,7 @@ export default function AdminPage() {
                         <button onClick={()=>document.getElementById('html-file-input')?.click()} style={{background:'none',border:'1px solid #2a2a2a',borderRadius:'3px',padding:'5px 12px',color:'#555',fontSize:'10px',letterSpacing:'0.08em',cursor:'pointer'}}>
                           📎 Subir HTML o ZIP
                         </button>
+                        <div id='zip-upload-status' style={{display:'none',fontSize:'11px',color:'#666',marginTop:'8px'}}></div>
                       </div>
                     </div>
                       <textarea value={campanaHtml} onChange={e=>setCampanaHtml(e.target.value)} placeholder='Pega aquí el HTML del email...' style={{width:'100%',background:'#0d0d0d',border:'1px solid #1e1e1e',borderRadius:'4px',padding:'12px',color:'#777',fontSize:'11px',fontFamily:'monospace',height:'300px',resize:'vertical' as const,boxSizing:'border-box' as const}} />
