@@ -463,7 +463,7 @@ export default function AdminPage() {
                       <div style={{fontSize:'12px',color:MUTED,marginBottom:'12px',lineHeight:'1.6'}}>Formato por línea: nombre, email, teléfono, zona, tipo_lead</div>
                       <input type='file' accept='.csv,.txt' id='csv-file-input' style={{display:'none'}} onChange={(e)=>{
                         const file = e.target.files?.[0];
-                        if (files.forEach(file => {) return;
+                        if (!file) return;
                         const reader = new FileReader();
                         reader.onload = (ev) => setImportCsv(ev.target?.result as string || '');
                         reader.readAsText(file);
