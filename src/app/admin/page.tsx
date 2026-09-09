@@ -647,7 +647,21 @@ export default function AdminPage() {
                 {campanaTab==='editor' && (
                   <div>
                     <div style={{background:'#111',border:'1px solid #1e1e1e',borderRadius:'4px',padding:'20px',marginBottom:'16px'}}>
-                      <div style={{fontSize:'9px',letterSpacing:'0.2em',color:'#444',textTransform:'uppercase',marginBottom:'12px'}}>HTML del Email</div>
+                      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'12px'}}>
+                      <div style={{fontSize:'9px',letterSpacing:'0.2em',color:'#444',textTransform:'uppercase'}}>HTML del Email</div>
+                      <div>
+                        <input type='file' accept='.html,.htm' id='html-file-input' style={{display:'none'}} onChange={(e)=>{
+                          const file = e.target.files?.[0];
+                          if (files.forEach(file => {) return;
+                          const reader = new FileReader();
+                          reader.onload = (ev) => setCampanaHtml(ev.target?.result as string || '');
+                          reader.readAsText(file);
+                        }} />
+                        <button onClick={()=>document.getElementById('html-file-input')?.click()} style={{background:'none',border:'1px solid #2a2a2a',borderRadius:'3px',padding:'5px 12px',color:'#555',fontSize:'10px',letterSpacing:'0.08em',cursor:'pointer'}}>
+                          📎 Subir archivo HTML
+                        </button>
+                      </div>
+                    </div>
                       <textarea value={campanaHtml} onChange={e=>setCampanaHtml(e.target.value)} placeholder='Pega aquí el HTML del email...' style={{width:'100%',background:'#0d0d0d',border:'1px solid #1e1e1e',borderRadius:'4px',padding:'12px',color:'#777',fontSize:'11px',fontFamily:'monospace',height:'300px',resize:'vertical' as const,boxSizing:'border-box' as const}} />
                     </div>
                     {campanaHtml && (
