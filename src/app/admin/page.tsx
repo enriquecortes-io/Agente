@@ -682,7 +682,15 @@ export default function AdminPage() {
                         <div id='zip-upload-status' style={{display:'none',fontSize:'11px',color:'#666',marginTop:'8px'}}></div>
                       </div>
                     </div>
-                      <textarea value={campanaHtml} onChange={e=>setCampanaHtml(e.target.value)} placeholder='Pega aquí el HTML del email...' style={{width:'100%',background:'#0d0d0d',border:'1px solid #1e1e1e',borderRadius:'4px',padding:'12px',color:'#777',fontSize:'11px',fontFamily:'monospace',height:'300px',resize:'vertical' as const,boxSizing:'border-box' as const}} />
+                      {campanaHtml.length > 200000 ? (
+                        <div style={{background:'#0d0d0d',border:'1px solid #1e1e1e',borderRadius:'4px',padding:'24px',textAlign:'center' as const}}>
+                          <div style={{fontSize:'13px',color:'#888',marginBottom:'8px'}}>📄 Email cargado ({Math.round(campanaHtml.length/1024)}KB)</div>
+                          <div style={{fontSize:'11px',color:'#555'}}>Demasiado grande para mostrar en el editor — listo para enviar</div>
+                          <button onClick={()=>setCampanaHtml('')} style={{marginTop:'12px',background:'none',border:'1px solid #333',borderRadius:'3px',padding:'6px 14px',color:'#777',fontSize:'11px',cursor:'pointer'}}>Quitar y subir otro</button>
+                        </div>
+                      ) : (
+                        <textarea value={campanaHtml} onChange={e=>setCampanaHtml(e.target.value)} placeholder='Pega aquí el HTML del email...' style={{width:'100%',background:'#0d0d0d',border:'1px solid #1e1e1e',borderRadius:'4px',padding:'12px',color:'#777',fontSize:'11px',fontFamily:'monospace',height:'300px',resize:'vertical' as const,boxSizing:'border-box' as const}} />
+                      )}
                     </div>
                     {campanaHtml && campanaHtml.length < 500000 && (
                       <div style={{background:'#111',border:'1px solid #1e1e1e',borderRadius:'4px',padding:'20px'}}>
