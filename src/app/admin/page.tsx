@@ -461,6 +461,16 @@ export default function AdminPage() {
                     <div style={{background:'#111',border:`1px solid ${BORDER}`,borderRadius:'6px',padding:'32px',width:'520px'}}>
                       <div style={{fontSize:'11px',letterSpacing:'0.2em',color:MUTED,textTransform:'uppercase',marginBottom:'12px'}}>Importar CSV</div>
                       <div style={{fontSize:'12px',color:MUTED,marginBottom:'12px',lineHeight:'1.6'}}>Formato por línea: nombre, email, teléfono, zona, tipo_lead</div>
+                      <input type='file' accept='.csv,.txt' id='csv-file-input' style={{display:'none'}} onChange={(e)=>{
+                        const file = e.target.files?.[0];
+                        if (files.forEach(file => {) return;
+                        const reader = new FileReader();
+                        reader.onload = (ev) => setImportCsv(ev.target?.result as string || '');
+                        reader.readAsText(file);
+                      }} />
+                      <button onClick={()=>document.getElementById('csv-file-input')?.click()} style={{background:'none',border:`1px solid ${BORDER}`,borderRadius:'3px',padding:'6px 14px',color:MUTED,fontSize:'11px',letterSpacing:'0.08em',cursor:'pointer',marginBottom:'10px'}}>
+                        📎 Seleccionar archivo CSV
+                      </button>
                       <textarea value={importCsv} onChange={e=>setImportCsv(e.target.value)} rows={8} placeholder={'Juan García, juan@email.com, +34600000000, Marbella, venta'} style={{width:'100%',background:SURFACE2,border:`1px solid ${BORDER}`,borderRadius:'3px',padding:'10px',color:CREAM,fontSize:'11px',fontFamily:'monospace',resize:'vertical' as const,boxSizing:'border-box' as const,marginBottom:'16px'}} />
                       <div style={{display:'flex',gap:'8px',justifyContent:'flex-end'}}>
                         <button onClick={()=>setLeadModal(null)} style={{background:'none',border:`1px solid ${BORDER}`,borderRadius:'3px',padding:'8px 16px',color:MUTED,fontSize:'11px',cursor:'pointer'}}>Cancelar</button>
