@@ -650,12 +650,25 @@ export default function AdminPage() {
                       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'12px'}}>
                       <div style={{fontSize:'9px',letterSpacing:'0.2em',color:'#444',textTransform:'uppercase'}}>HTML del Email</div>
                       <div>
-                        <input type='file' accept='.html,.htm' id='html-file-input' style={{display:'none'}} onChange={(e)=>{
+                        <input type='file' accept='.zip,.html,.htm,application/zip,application/x-zip-compressed,text/html' id='html-file-input' style={{display:'none'}} onChange={async (e)=>{
                           const file = e.target.files?.[0];
                           if (!file) return;
-                          const reader = new FileReader();
-                          reader.onload = (ev) => setCampanaHtml(ev.target?.result as string || '');
-                          reader.readAsText(file);
+                          if (file.name.toLowerCase().endsWith('.zip')) {
+                            const fd = new FormData();
+                            fd.append('file', file);
+                            try {
+                              const res = await fetch('/api/campaigns/upload-zip', { method: 'POST', body: fd });
+                              const data = await res.json();
+                              if (data.html) setCampanaHtml(data.html);
+                              else alert('Error: ' + (data.error || 'desconocido'));
+                            } catch (err: any) {
+                              alert('Error subiendo ZIP: ' + err.message);
+                            }
+                          } else {
+                            const reader = new FileReader();
+                            reader.onload = (ev) => setCampanaHtml(ev.target?.result as string || '');
+                            reader.readAsText(file);
+                          }
                         }} />
                         <button onClick={()=>document.getElementById('html-file-input')?.click()} style={{background:'none',border:'1px solid #2a2a2a',borderRadius:'3px',padding:'5px 12px',color:'#555',fontSize:'10px',letterSpacing:'0.08em',cursor:'pointer'}}>
                           📎 Subir HTML o ZIP
