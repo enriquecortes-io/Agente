@@ -249,7 +249,7 @@ export default function AdminPage() {
       const res = await fetch('/api/admin/leads', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ batch: leads }),
+        body: JSON.stringify({ batch: leads, proyecto: project }),
       });
       const data = await res.json();
       alert('Importados: ' + (data.count || leads.length) + ' leads');
