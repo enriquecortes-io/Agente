@@ -204,7 +204,14 @@ export default function AdminPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ proyecto: project, remitente: campanaRemitente, asunto: campanaAsunto, html: campanaHtml }),
       });
-      const data = await res.json();
+      const rawText = await res.text();
+      console.log('[Debug] status:', res.status, 'raw response:', rawText.slice(0, 500));
+      let data;
+      try { data = JSON.parse(rawText); } catch (parseErr) {
+        alert('Respuesta no-JSON (status ' + res.status + '): ' + rawText.slice(0, 300));
+        setCampaignLoading(false);
+        return;
+      }
       if (data.error) alert('Error: ' + data.error);
       else alert(data.message + ' — Enviados: ' + (data.sent || 0) + (data.failed ? ', Fallidos: ' + data.failed : ''));
       fetchEmailLeads();
