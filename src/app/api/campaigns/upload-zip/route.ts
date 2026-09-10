@@ -71,7 +71,7 @@ export async function POST(req: Request) {
           fileId,
           requestBody: { role: 'reader', type: 'anyone' },
         });
-        const publicUrl = `https://lh3.googleusercontent.com/d/${fileId}`;
+        const publicUrl = `https://drive.google.com/uc?export=view&id=${fileId}`;
         html = html.replaceAll(imgName, publicUrl);
         html = html.replaceAll(filename, publicUrl);
         uploaded++;
