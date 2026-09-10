@@ -18,7 +18,7 @@ export async function GET(req: Request) {
   const supabase = getSupabase(project);
   const { data, error } = await supabase
     .from('leads')
-    .select('id, name, email, phone, estado, fase, created_at')
+    .select('id, name, email, phone, fase, created_at')
     .eq('proyecto', project);
   if (error) { console.log('[Campanas] Supabase error:', JSON.stringify(error)); return new Response(JSON.stringify({ error: error.message, debug: error }), { status: 500 }); }
   console.log('[Campanas] data count:', data?.length);
