@@ -315,7 +315,7 @@ export default function AdminPage() {
     <>
       <style>{css}</style>
       
-      <div style={{display:'flex',height:'100vh',overflow:'hidden',background:DARK}}>
+      <div style={{display:'flex',height:'100vh',overflow:'hidden',background:'rgba(17,17,17,0.85)',position:'relative',zIndex:1}}>
 
         {/* SIDEBAR */}
         <div style={{width:'220px',minWidth:'220px',borderRight:`1px solid ${BORDER}`,display:'flex',flexDirection:'column',padding:'32px 0'}}>
