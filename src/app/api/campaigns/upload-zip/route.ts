@@ -5,10 +5,14 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 export async function POST(req: Request) {
+  const cldName = process.env.CLOUDINARY_CLOUD_NAME;
+  const cldKey = process.env.CLOUDINARY_API_KEY;
+  const cldSecret = process.env.CLOUDINARY_API_SECRET;
+  console.log('[UploadZip] Cloudinary vars:', !!cldName, !!cldKey, !!cldSecret, cldName);
   cloudinary.config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-    api_key: process.env.CLOUDINARY_API_KEY,
-    api_secret: process.env.CLOUDINARY_API_SECRET,
+    cloud_name: cldName,
+    api_key: cldKey,
+    api_secret: cldSecret,
   });
   try {
     const formData = await req.formData();
