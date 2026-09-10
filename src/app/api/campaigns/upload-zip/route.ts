@@ -20,6 +20,7 @@ export async function POST(req: Request) {
     const zip = new AdmZip(buffer);
     const entries = zip.getEntries();
 
+    console.log('[UploadZip] Total entries en ZIP:', entries.length, entries.map(e => e.entryName).join(', '));
     const htmlEntry = entries.find(e => e.entryName.endsWith('.html'));
     if (!htmlEntry) return Response.json({ error: 'No se encontró HTML en el ZIP' }, { status: 400 });
 
