@@ -6,6 +6,9 @@ function getSupabase(project: string) {
   if (project === 'solena') {
     return createClient(process.env.SOLENA_SUPABASE_URL!, process.env.SOLENA_SERVICE_ROLE_KEY!);
   }
+  if (project === 'smc') {
+    return createClient(process.env.SMC_SUPABASE_URL!, process.env.SMC_SERVICE_ROLE_KEY!);
+  }
   return createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
