@@ -18,11 +18,8 @@ export async function GET(req: Request) {
   const supabase = getSupabase(project);
   const { data, error } = await supabase
     .from('leads')
-    .select('*')
-    .eq('proyecto', project)
-    .not('email', 'is', null)
-    .neq('email', '')
-    .order('created_at', { ascending: false });
+    .select('id, name, email, phone, estado, fase, created_at')
+    .eq('proyecto', project);
   if (error) { console.log('[Campanas] Supabase error:', JSON.stringify(error)); return new Response(JSON.stringify({ error: error.message, debug: error }), { status: 500 }); }
   console.log('[Campanas] data count:', data?.length);
   return new Response(JSON.stringify({ leads: data }), { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store, no-cache, must-revalidate' } });
