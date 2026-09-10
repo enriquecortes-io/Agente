@@ -50,6 +50,7 @@ export async function POST(req: Request) {
         parents: [parentFolderId],
       },
       fields: 'id',
+      supportsAllDrives: true,
     });
     const campaignFolderId = folderRes.data.id!;
 
@@ -65,11 +66,13 @@ export async function POST(req: Request) {
           requestBody: { name: filename, parents: [campaignFolderId] },
           media: { mimeType: mime, body: require('stream').Readable.from(img.getData()) },
           fields: 'id',
+          supportsAllDrives: true,
         });
         const fileId = fileRes.data.id!;
         await drive.permissions.create({
           fileId,
           requestBody: { role: 'reader', type: 'anyone' },
+          supportsAllDrives: true,
         });
         const publicUrl = `https://drive.google.com/uc?export=view&id=${fileId}`;
         html = html.replaceAll(imgName, publicUrl);
