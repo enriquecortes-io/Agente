@@ -40,7 +40,7 @@ export async function POST(req: Request) {
     );
 
     const drive = getDriveService();
-    const parentFolderId = '1TcFrmP-kRPkv8J37jOhuL-B10bl893cF';
+    const parentFolderId = '1OvXA1CpwJkLnu3UuG7N9yjxQCLQuXj7F';
 
     // Crear carpeta para esta campaña
     const folderRes = await drive.files.create({
