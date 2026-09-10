@@ -40,7 +40,7 @@ export async function POST(req: Request) {
     );
 
     const drive = getDriveService();
-    const parentFolderId = process.env.GOOGLE_FOLDER_IMAGENES || '1ao8-TxyWx3mzD3YWvo0gDkODitJcWeYq';
+    const parentFolderId = '1TcFrmP-kRPkv8J37jOhuL-B10bl893cF';
 
     // Crear carpeta para esta campaña
     const folderRes = await drive.files.create({
