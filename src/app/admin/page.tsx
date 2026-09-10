@@ -1,6 +1,5 @@
 'use client';
-import dynamic from 'next/dynamic';
-const AuraVoidBackground = dynamic(() => import('../../components/AuraVoidBackground'), { ssr: false });
+
 import { useState, useEffect } from 'react';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { fetchFile, toBlobURL } from '@ffmpeg/util';
@@ -282,7 +281,7 @@ export default function AdminPage() {
   return (
     <>
       <style>{css}</style>
-      <AuraVoidBackground />
+      
       <div style={{display:'flex',height:'100vh',overflow:'hidden',background:DARK}}>
 
         {/* SIDEBAR */}
