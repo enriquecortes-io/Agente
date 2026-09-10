@@ -22,5 +22,13 @@ export async function GET(req: Request) {
     .eq('proyecto', project);
   if (error) { console.log('[Campanas] Supabase error:', JSON.stringify(error)); return new Response(JSON.stringify({ error: error.message, debug: error }), { status: 500 }); }
   console.log('[Campanas] data count:', data?.length);
-  return new Response(JSON.stringify({ leads: data }), { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store, no-cache, must-revalidate' } });
+  const mapped = (data || []).map((l: any) => ({
+    id: l.id,
+    nombre: l.name,
+    email: l.email,
+    phone: l.phone,
+    estado: l.fase === 'email_enviado' ? 'enviado' : (l.fase === 'bounced' ? 'bounced' : 'pendiente'),
+    enviado_at: l.fase === 'email_enviado' ? l.created_at : null,
+  }));
+  return new Response(JSON.stringify({ leads: mapped }), { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store, no-cache, must-revalidate' } });
 }
