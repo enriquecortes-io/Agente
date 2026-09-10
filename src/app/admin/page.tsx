@@ -198,9 +198,14 @@ export default function AdminPage() {
   async function enviarCampana() {
     setCampaignLoading(true);
     try {
-      const res = await fetch('/api/campaigns/send', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+      const res = await fetch('/api/campaigns/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ proyecto: project, remitente: campanaRemitente, asunto: campanaAsunto, html: campanaHtml }),
+      });
       const data = await res.json();
-      alert(data.message || 'Campaña iniciada');
+      if (data.error) alert('Error: ' + data.error);
+      else alert(data.message + ' — Enviados: ' + (data.sent || 0) + (data.failed ? ', Fallidos: ' + data.failed : ''));
       fetchEmailLeads();
     } catch(e) { alert('Error: ' + e); }
     setCampaignLoading(false);
