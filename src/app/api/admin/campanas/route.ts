@@ -23,5 +23,5 @@ export async function GET(req: Request) {
     .neq('email', '')
     .order('created_at', { ascending: false });
   if (error) return new Response(JSON.stringify({ error: error.message }), { status: 500 });
-  return new Response(JSON.stringify({ leads: data }), { headers: { 'Content-Type': 'application/json' } });
+  return new Response(JSON.stringify({ leads: data }), { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store, no-cache, must-revalidate' } });
 }
