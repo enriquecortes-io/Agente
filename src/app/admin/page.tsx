@@ -197,6 +197,7 @@ export default function AdminPage() {
 
   async function enviarCampana() {
     setCampaignLoading(true);
+    console.log('[Debug] campanaHtml length:', campanaHtml?.length, 'asunto:', campanaAsunto, 'remitente:', campanaRemitente, 'project:', project);
     try {
       const res = await fetch('/api/campaigns/send', {
         method: 'POST',
