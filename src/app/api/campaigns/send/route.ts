@@ -71,9 +71,12 @@ export async function POST(req: Request) {
           sent++;
           await supabase.from('leads').update({ fase: 'email_enviado' }).eq('id', lead.id);
         } else {
+          const errBody = await res.text();
+          console.log('[CampaignSend] Resend error for', lead.email, ':', res.status, errBody);
           failed++;
         }
-      } catch {
+      } catch (err: any) {
+        console.log('[CampaignSend] Exception for', lead.email, ':', err.message);
         failed++;
       }
     }
