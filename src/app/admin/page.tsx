@@ -188,6 +188,39 @@ export default function AdminPage() {
     details>summary{list-style:none;cursor:pointer;} details>summary::-webkit-details-marker{display:none;}
   `;
 
+  useEffect(() => {
+    const c = document.getElementById('voronoi-bg') as HTMLCanvasElement;
+    if (!c) return;
+    const gl = c.getContext('webgl');
+    if (!gl) return;
+    c.width = window.innerWidth; c.height = window.innerHeight;
+    const vs = gl.createShader(gl.VERTEX_SHADER)!;
+    gl.shaderSource(vs, 'attribute vec2 p;varying vec2 v;void main(){v=p*.5+.5;gl_Position=vec4(p,0,1);}');
+    gl.compileShader(vs);
+    const fs = gl.createShader(gl.FRAGMENT_SHADER)!;
+    gl.shaderSource(fs, 'precision mediump float;varying vec2 v;uniform float t;uniform vec2 m;float vor(vec2 x){vec2 n=floor(x),f=fract(x);float r=8.;for(int j=-1;j<=1;j++)for(int i=-1;i<=1;i++){vec2 g=vec2(float(i),float(j)),p=fract(sin(dot(n+g,vec2(127.1,311.7)))*43758.5453);float d=length(g+p-f);if(d<r)r=d;}return r;}void main(){float vv=vor(v*4.+t*.04);float glow=pow(1.-smoothstep(0.,.55,length(v-m)),3.);vec3 col=.6+.4*cos(t*.15+vec3(0,2,4));gl_FragColor=vec4(col*vv*1.1,glow*.4);}');
+    gl.compileShader(fs);
+    const prog = gl.createProgram()!;
+    gl.attachShader(prog,vs); gl.attachShader(prog,fs); gl.linkProgram(prog); gl.useProgram(prog);
+    const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,buf);
+    gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
+    const loc = gl.getAttribLocation(prog,'p'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
+    const tLoc=gl.getUniformLocation(prog,'t'), mLoc=gl.getUniformLocation(prog,'m');
+    let mx=.5,my=.5; const start=Date.now();
+    const onMove = (e: PointerEvent) => { mx=e.clientX/c.width; my=1-e.clientY/c.height; };
+    window.addEventListener('pointermove', onMove);
+    let raf: number;
+    const loop = () => {
+      gl.viewport(0,0,c.width,c.height);
+      gl.uniform1f(tLoc,(Date.now()-start)*.001);
+      gl.uniform2f(mLoc,mx,my);
+      gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+      raf = requestAnimationFrame(loop);
+    };
+    loop();
+    return () => { window.removeEventListener('pointermove', onMove); cancelAnimationFrame(raf); };
+  }, []);
+
   async function fetchEmailLeads() {
     try {
       const res = await fetch('/api/admin/campanas?project=' + project + '&t=' + Date.now());
