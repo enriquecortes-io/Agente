@@ -1,8 +1,24 @@
-
 import AdmZip from 'adm-zip';
+import { google } from 'googleapis';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
+
+function getDriveService() {
+  const privateKey = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n') || '';
+  const auth = new google.auth.GoogleAuth({
+    projectId: 'harvis-496912',
+    credentials: {
+      type: 'service_account',
+      project_id: 'harvis-496912',
+      private_key: privateKey,
+      client_email: process.env.GOOGLE_CLIENT_EMAIL || 'harvis@harvis-496912.iam.gserviceaccount.com',
+      client_id: process.env.GOOGLE_CLIENT_ID || '102203927356076425365',
+    } as any,
+    scopes: ['https://www.googleapis.com/auth/drive'],
+  });
+  return google.drive({ version: 'v3', auth });
+}
 
 export async function POST(req: Request) {
   try {
@@ -23,17 +39,48 @@ export async function POST(req: Request) {
       !e.isDirectory && e.entryName.match(/\.(jpg|jpeg|png|gif|webp)$/i)
     );
 
+    const drive = getDriveService();
+    const parentFolderId = process.env.GOOGLE_FOLDER_IMAGENES || '1ao8-TxyWx3mzD3YWvo0gDkODitJcWeYq';
+
+    // Crear carpeta para esta campaña
+    const folderRes = await drive.files.create({
+      requestBody: {
+        name: `Campaña-${Date.now()}`,
+        mimeType: 'application/vnd.google-apps.folder',
+        parents: [parentFolderId],
+      },
+      fields: 'id',
+    });
+    const campaignFolderId = folderRes.data.id!;
+
+    let uploaded = 0;
     for (const img of imgEntries) {
       const imgName = img.entryName;
-      const ext = imgName.split('.').pop()!.toLowerCase();
+      const filename = imgName.split('/').pop()!;
+      const ext = filename.split('.').pop()!.toLowerCase();
       const mime = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : `image/${ext}`;
-      const b64 = img.getData().toString('base64');
-      const dataUri = `data:${mime};base64,${b64}`;
-      html = html.replaceAll(imgName, dataUri);
-      html = html.replaceAll(imgName.split('/').pop()!, dataUri);
+
+      try {
+        const fileRes = await drive.files.create({
+          requestBody: { name: filename, parents: [campaignFolderId] },
+          media: { mimeType: mime, body: require('stream').Readable.from(img.getData()) },
+          fields: 'id',
+        });
+        const fileId = fileRes.data.id!;
+        await drive.permissions.create({
+          fileId,
+          requestBody: { role: 'reader', type: 'anyone' },
+        });
+        const publicUrl = `https://lh3.googleusercontent.com/d/${fileId}`;
+        html = html.replaceAll(imgName, publicUrl);
+        html = html.replaceAll(filename, publicUrl);
+        uploaded++;
+      } catch (imgErr: any) {
+        console.log('[UploadZip] Error subiendo imagen', filename, imgErr.message);
+      }
     }
 
-    return Response.json({ html, imageCount: imgEntries.length });
+    return Response.json({ html, imageCount: uploaded });
   } catch (error: any) {
     return Response.json({ error: error.message }, { status: 500 });
   }
