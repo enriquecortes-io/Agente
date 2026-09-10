@@ -14,6 +14,7 @@ function getSupabase(project: string) {
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const project = url.searchParams.get('project') || 'tem';
+  console.log('[Campanas] project:', project, 'SMC_URL exists:', !!process.env.SMC_SUPABASE_URL);
   const supabase = getSupabase(project);
   const { data, error } = await supabase
     .from('leads')
@@ -22,6 +23,7 @@ export async function GET(req: Request) {
     .not('email', 'is', null)
     .neq('email', '')
     .order('created_at', { ascending: false });
-  if (error) return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+  if (error) { console.log('[Campanas] Supabase error:', JSON.stringify(error)); return new Response(JSON.stringify({ error: error.message, debug: error }), { status: 500 }); }
+  console.log('[Campanas] data count:', data?.length);
   return new Response(JSON.stringify({ leads: data }), { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store, no-cache, must-revalidate' } });
 }
