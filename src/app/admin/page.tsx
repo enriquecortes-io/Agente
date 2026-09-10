@@ -1,6 +1,6 @@
 'use client';
 import dynamic from 'next/dynamic';
-const AuraVoidBackground = dynamic(() => import('@/components/AuraVoidBackground'), { ssr: false });
+const AuraVoidBackground = dynamic(() => import('../../components/AuraVoidBackground'), { ssr: false });
 import { useState, useEffect } from 'react';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { fetchFile, toBlobURL } from '@ffmpeg/util';
