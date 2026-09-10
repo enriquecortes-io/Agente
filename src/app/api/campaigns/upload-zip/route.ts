@@ -54,8 +54,9 @@ export async function POST(req: Request) {
           resource_type: resourceType as any,
         });
 
-        html = html.replaceAll(imgName, result.secure_url);
-        html = html.replaceAll(filename, result.secure_url);
+        // Reemplazar solo en contextos de src/href para evitar concatenaciones
+        html = html.replace(new RegExp(imgName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), result.secure_url);
+        html = html.replace(new RegExp('(?<=["\'\\s])' + filename.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?=["\'\\s>])', 'g'), result.secure_url);
         uploaded++;
       } catch (imgErr: any) {
         console.log('[UploadZip] Error subiendo a Cloudinary:', filename, imgErr.message);
