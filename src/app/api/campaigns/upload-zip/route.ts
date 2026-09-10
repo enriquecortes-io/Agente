@@ -29,6 +29,8 @@ export async function POST(req: Request) {
       !e.isDirectory && e.entryName.match(/\.(jpg|jpeg|png|gif|webp)$/i)
     );
 
+    console.log('[UploadZip] Imágenes encontradas:', imgEntries.length);
+    console.log('[UploadZip] CLOUDINARY config:', !!process.env.CLOUDINARY_CLOUD_NAME, !!process.env.CLOUDINARY_API_KEY, !!process.env.CLOUDINARY_API_SECRET);
     let uploaded = 0;
     for (const img of imgEntries) {
       const imgName = img.entryName;
