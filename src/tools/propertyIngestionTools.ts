@@ -317,18 +317,20 @@ async function descargarImagenViaApify(imgUrl: string, referer: string): Promise
   try {
     const payload = {
       startUrls: [{ url: imgUrl }],
+      preNavigationHooks: `[
+        async ({ page }) => {
+          await page.setExtraHTTPHeaders({ 'Referer': ${JSON.stringify(referer)} });
+        },
+      ]`,
       pageFunction: `async function pageFunction(context) {
-        const { request } = context;
-        const res = await fetch(request.url, {
-          headers: {
-            'Referer': ${JSON.stringify(referer)},
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          },
-        });
-        if (!res.ok) return { ok: false, status: res.status };
-        const buf = await res.arrayBuffer();
-        const b64 = Buffer.from(buf).toString('base64');
-        return { ok: true, contentType: res.headers.get('content-type'), data: b64 };
+        const { response } = context;
+        if (!response) return { ok: false, status: 0, reason: 'no response object' };
+        const status = response.status();
+        if (status !== 200) return { ok: false, status };
+        const buffer = await response.body();
+        const b64 = buffer.toString('base64');
+        const contentType = response.headers()['content-type'] || '';
+        return { ok: true, contentType, data: b64 };
       }`,
       maxRequestsPerCrawl: 1,
     };
