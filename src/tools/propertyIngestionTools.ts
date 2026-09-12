@@ -333,7 +333,7 @@ async function subirImagenesDrive(imagenes: string[], nombrePropiedad: string, u
       const referer = urlOrigen || imgDomain + '/';
       const refererOrigin = new URL(referer).origin;
       const isCrossSite = refererOrigin !== imgDomain;
-      const imgRes = await fetch(imgUrl, {
+      let imgRes = await fetch(imgUrl, {
         headers: {
           'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
           'Referer': referer,
@@ -345,6 +345,29 @@ async function subirImagenesDrive(imagenes: string[], nombrePropiedad: string, u
           'sec-fetch-site': isCrossSite ? 'cross-site' : 'same-origin',
         },
       });
+
+      // Fallback: si el fetch directo falla (403/bloqueo por IP de Vercel), reintentar vía proxy de Apify
+      if (!imgRes.ok && process.env.APIFY_API_KEY) {
+        console.log(`[Drive] Imagen ${i+1} bloqueada (HTTP ${imgRes.status}) — reintentando vía proxy Apify...`);
+        try {
+          const { ProxyAgent } = await import('undici');
+          const proxyUrl = `http://auto:${process.env.APIFY_API_KEY}@proxy.apify.com:8000`;
+          const dispatcher = new ProxyAgent(proxyUrl);
+          imgRes = await fetch(imgUrl, {
+            // @ts-ignore - dispatcher es específico de undici, no está en el tipo estándar de fetch
+            dispatcher,
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              'Referer': referer,
+              'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
+            },
+          });
+          if (imgRes.ok) console.log(`[Drive] Imagen ${i+1} recuperada vía proxy Apify`);
+        } catch (proxyErr: any) {
+          console.log(`[Drive] Proxy Apify falló: ${proxyErr.message}`);
+        }
+      }
+
       if (!imgRes.ok) {
         console.log(`[Drive] Skip imagen ${i+1}: HTTP ${imgRes.status} — ${imgUrl.slice(0,80)}`);
         continue;
