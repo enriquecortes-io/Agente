@@ -306,7 +306,7 @@ Responde SOLO en JSON:
 }
 
 // 3. SUBIR IMÁGENES A DRIVE Y OBTENER URLS PÚBLICAS
-async function subirImagenesDrive(imagenes: string[], nombrePropiedad: string): Promise<string[]> {
+async function subirImagenesDrive(imagenes: string[], nombrePropiedad: string, urlOrigen?: string): Promise<string[]> {
     const drive = getDriveService();
   const parentFolderId = process.env.GOOGLE_FOLDER_IMAGENES || "1ao8-TxyWx3mzD3YWvo0gDkODitJcWeYq";
   console.log("[Drive] parentFolderId:", parentFolderId);
@@ -330,14 +330,19 @@ async function subirImagenesDrive(imagenes: string[], nombrePropiedad: string): 
     try {
       const imgUrl = imagenes[i];
       const imgDomain = new URL(imgUrl).origin;
+      const referer = urlOrigen || imgDomain + '/';
+      const refererOrigin = new URL(referer).origin;
+      const isCrossSite = refererOrigin !== imgDomain;
       const imgRes = await fetch(imgUrl, {
         headers: {
           'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Referer': imgDomain + '/',
+          'Referer': referer,
+          'Origin': refererOrigin,
           'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
+          'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
           'sec-fetch-dest': 'image',
           'sec-fetch-mode': 'no-cors',
-          'sec-fetch-site': 'same-origin',
+          'sec-fetch-site': isCrossSite ? 'cross-site' : 'same-origin',
         },
       });
       if (!imgRes.ok) {
@@ -379,7 +384,7 @@ async function subirImagenesDrive(imagenes: string[], nombrePropiedad: string): 
 async function insertarPropiedad(datos: any, descripcion: { es: string; en: string }, galeriaUrls: string[], slug: string) {
   const supabase = getSupabase();
 
-  const { data, error } = await supabase.from('properties').insert({
+  const { data, error } = await supabase.from('properties').upsert({
     slug,
     titulo: { es: datos.titulo, en: datos.titulo, fr: datos.titulo, ru: datos.titulo },
     descripcion: { es: descripcion.es, en: descripcion.en, fr: descripcion.es, ru: descripcion.es },
@@ -428,7 +433,7 @@ export async function ingerirPropiedad(url: string, slug?: string): Promise<{
     // 4. Subir imágenes a Drive — con fallback a URLs directas si Drive falla
     let galeriaUrls: string[] = [];
     try {
-      galeriaUrls = await subirImagenesDrive(datos.imagenes, datos.titulo);
+      galeriaUrls = await subirImagenesDrive(datos.imagenes, datos.titulo, url);
     } catch(e: any) {
       console.log('[TEM] Drive error:', e.message);
     }
