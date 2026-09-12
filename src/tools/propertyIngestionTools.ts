@@ -309,7 +309,10 @@ Responde SOLO en JSON:
 // Descarga una imagen bloqueada usando un Actor de Apify (corre en su red, no en la de Vercel)
 async function descargarImagenViaApify(imgUrl: string, referer: string): Promise<Buffer | null> {
   const apiKey = process.env.APIFY_API_KEY;
-  if (!apiKey) return null;
+  if (!apiKey) {
+    console.log('[Drive] descargarImagenViaApify: falta APIFY_API_KEY');
+    return null;
+  }
 
   try {
     const payload = {
@@ -330,6 +333,7 @@ async function descargarImagenViaApify(imgUrl: string, referer: string): Promise
       maxRequestsPerCrawl: 1,
     };
 
+    console.log('[Drive] Llamando Apify Actor para:', imgUrl.slice(0, 80));
     const runRes = await fetch(
       `https://api.apify.com/v2/acts/apify~playwright-scraper/run-sync-get-dataset-items?token=${apiKey}&timeout=60`,
       {
@@ -338,10 +342,19 @@ async function descargarImagenViaApify(imgUrl: string, referer: string): Promise
         body: JSON.stringify(payload),
       }
     );
-    if (!runRes.ok) return null;
+    console.log('[Drive] Apify runRes status:', runRes.status);
+    if (!runRes.ok) {
+      const errText = await runRes.text();
+      console.log('[Drive] Apify error body:', errText.slice(0, 300));
+      return null;
+    }
     const items = await runRes.json();
+    console.log('[Drive] Apify items count:', Array.isArray(items) ? items.length : 'no-array', JSON.stringify(items).slice(0, 300));
     const item = items?.[0];
-    if (!item?.ok || !item?.data) return null;
+    if (!item?.ok || !item?.data) {
+      console.log('[Drive] Apify item sin data válida:', JSON.stringify(item).slice(0, 300));
+      return null;
+    }
     return Buffer.from(item.data, 'base64');
   } catch (e: any) {
     console.log(`[Drive] descargarImagenViaApify error: ${e.message}`);
