@@ -306,6 +306,49 @@ Responde SOLO en JSON:
 }
 
 // 3. SUBIR IMÁGENES A DRIVE Y OBTENER URLS PÚBLICAS
+// Descarga una imagen bloqueada usando un Actor de Apify (corre en su red, no en la de Vercel)
+async function descargarImagenViaApify(imgUrl: string, referer: string): Promise<Buffer | null> {
+  const apiKey = process.env.APIFY_API_KEY;
+  if (!apiKey) return null;
+
+  try {
+    const payload = {
+      startUrls: [{ url: imgUrl }],
+      pageFunction: `async function pageFunction(context) {
+        const { request } = context;
+        const res = await fetch(request.url, {
+          headers: {
+            'Referer': ${JSON.stringify(referer)},
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          },
+        });
+        if (!res.ok) return { ok: false, status: res.status };
+        const buf = await res.arrayBuffer();
+        const b64 = Buffer.from(buf).toString('base64');
+        return { ok: true, contentType: res.headers.get('content-type'), data: b64 };
+      }`,
+      maxRequestsPerCrawl: 1,
+    };
+
+    const runRes = await fetch(
+      `https://api.apify.com/v2/acts/apify~playwright-scraper/run-sync-get-dataset-items?token=${apiKey}&timeout=60`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }
+    );
+    if (!runRes.ok) return null;
+    const items = await runRes.json();
+    const item = items?.[0];
+    if (!item?.ok || !item?.data) return null;
+    return Buffer.from(item.data, 'base64');
+  } catch (e: any) {
+    console.log(`[Drive] descargarImagenViaApify error: ${e.message}`);
+    return null;
+  }
+}
+
 async function subirImagenesDrive(imagenes: string[], nombrePropiedad: string, urlOrigen?: string): Promise<string[]> {
     const drive = getDriveService();
   const parentFolderId = process.env.GOOGLE_FOLDER_IMAGENES || "1ao8-TxyWx3mzD3YWvo0gDkODitJcWeYq";
@@ -346,41 +389,28 @@ async function subirImagenesDrive(imagenes: string[], nombrePropiedad: string, u
         },
       });
 
-      // Fallback: si el fetch directo falla (403/bloqueo por IP de Vercel), reintentar vía proxy de Apify
-      if (!imgRes.ok && process.env.APIFY_API_KEY) {
-        console.log(`[Drive] Imagen ${i+1} bloqueada (HTTP ${imgRes.status}) — reintentando vía proxy Apify...`);
-        try {
-          const { ProxyAgent } = await import('undici');
-          const proxyUrl = `http://auto:${process.env.APIFY_API_KEY}@proxy.apify.com:8000`;
-          const dispatcher = new ProxyAgent(proxyUrl);
-          imgRes = await fetch(imgUrl, {
-            // @ts-ignore - dispatcher es específico de undici, no está en el tipo estándar de fetch
-            dispatcher,
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-              'Referer': referer,
-              'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
-            },
-          });
-          if (imgRes.ok) console.log(`[Drive] Imagen ${i+1} recuperada vía proxy Apify`);
-        } catch (proxyErr: any) {
-          console.log(`[Drive] Proxy Apify falló: ${proxyErr.message}`);
+      let bufferFromApify: Buffer | null = null;
+
+      // Fallback: si el fetch directo falla (403/bloqueo por IP de Vercel), descargar vía Actor de Apify
+      if (!imgRes.ok) {
+        console.log(`[Drive] Imagen ${i+1} bloqueada (HTTP ${imgRes.status}) — reintentando vía Apify...`);
+        bufferFromApify = await descargarImagenViaApify(imgUrl, referer);
+        if (bufferFromApify) {
+          console.log(`[Drive] Imagen ${i+1} recuperada vía Apify (${bufferFromApify.length} bytes)`);
+        } else {
+          console.log(`[Drive] Skip imagen ${i+1}: HTTP ${imgRes.status} — ${imgUrl.slice(0,80)}`);
+          continue;
         }
       }
 
-      if (!imgRes.ok) {
-        console.log(`[Drive] Skip imagen ${i+1}: HTTP ${imgRes.status} — ${imgUrl.slice(0,80)}`);
-        continue;
-      }
-
-      const buffer = await imgRes.arrayBuffer();
-      const mimeType = imgRes.headers.get('content-type') || 'image/jpeg';
+      const buffer = bufferFromApify ? bufferFromApify : Buffer.from(await imgRes.arrayBuffer());
+      const mimeType = bufferFromApify ? 'image/jpeg' : (imgRes.headers.get('content-type') || 'image/jpeg');
       const ext = imagenes[i].split('.').pop()?.toLowerCase() || 'jpg';
       const fileName = `${String(i + 1).padStart(3, '0')}.${ext}`;
 
       const file = await drive.files.create({
         requestBody: { name: fileName, parents: [carpetaId] },
-        media: { mimeType, body: Readable.from(Buffer.from(buffer)) },
+        media: { mimeType, body: Readable.from(buffer) },
         fields: 'id',
         supportsAllDrives: true,
       });
@@ -421,7 +451,7 @@ async function insertarPropiedad(datos: any, descripcion: { es: string; en: stri
     tipo: 'villa',
     zona: '',
     ubicacion: '',
-  }).select().single();
+  }, { onConflict: 'slug' }).select().single();
 
   if (error) throw new Error(error.message);
   console.log(`[Ingestion] Propiedad insertada en Supabase: ${data.id}`);
