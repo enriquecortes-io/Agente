@@ -1,0 +1,457 @@
+import { createClient } from '@supabase/supabase-js';
+import { google } from 'googleapis';
+import dotenv from 'dotenv';
+dotenv.config({ path: '.env.local' });
+
+function getSupabase() {
+  return createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+}
+
+function getDriveService() {
+  const privateKey = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n') || '';
+  const auth = new google.auth.GoogleAuth({
+    projectId: 'harvis-496912',
+    credentials: {
+      type: 'service_account',
+      project_id: 'harvis-496912',
+      private_key: privateKey,
+      client_email: process.env.GOOGLE_CLIENT_EMAIL || 'harvis@harvis-496912.iam.gserviceaccount.com',
+      client_id: process.env.GOOGLE_CLIENT_ID || '102203927356076425365',
+    } as any,
+    scopes: ['https://www.googleapis.com/auth/drive'],
+  });
+  return google.drive({ version: 'v3', auth });
+}
+
+// 1. EXTRAER DATOS DE LA WEB
+function extraerDatosDeHtml(html: string, url: string) {
+  const urlBase = new URL(url);
+  
+  const imageSet = new Set<string>();
+  const srcMatches = html.matchAll(/(?:src|data-src|data-lazy)=["']([^"']+\.(jpg|jpeg|png|webp|avif)[^"']*)/gi);
+  for (const m of srcMatches) {
+    const imgUrl = m[1].startsWith('http') ? m[1] : `${urlBase.origin}${m[1].startsWith('/') ? '' : '/'}${m[1]}`;
+    imageSet.add(imgUrl.split('?')[0]);
+  }
+  const srcsetMatches = html.matchAll(/srcset=["']([^"']+)/gi);
+  for (const m of srcsetMatches) {
+    m[1].split(',').forEach((s: string) => {
+      const u = s.trim().split(' ')[0];
+      if (u.match(/\.(jpg|jpeg|png|webp|avif)/i)) {
+        const imgUrl = u.startsWith('http') ? u : `${urlBase.origin}${u.startsWith('/') ? '' : '/'}${u}`;
+        imageSet.add(imgUrl.split('?')[0]);
+      }
+    });
+  }
+  const cdnMatches = html.matchAll(/https:\/\/(?:uploadcare\.[a-z.]+|[\w-]+\.cloudinary\.com|[\w-]+\.imgix\.net)\/[a-f0-9-]{36}\/[^"'\s)]*/gi);
+  for (const m of cdnMatches) {
+    const base = m[0].split('/-/')[0];
+    imageSet.add(`${base}/-/format/jpeg/-/resize/2000x/-/quality/best/`);
+  }
+  // og:image y twitter:image (SPAs con SSR parcial)
+  const metaOg = html.matchAll(/<meta[^>]+(?:property|name)=["'](?:og:image|twitter:image)["'][^>]+content=["']([^"']+)["']/gi);
+  for (const m of metaOg) {
+    if (m[1].match(/\.(jpg|jpeg|png|webp|avif)/i) || m[1].includes('/storage/') || m[1].includes('/images/')) {
+      imageSet.add(m[1].split('?')[0]);
+    }
+  }
+  const metaOg2 = html.matchAll(/<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["'](?:og:image|twitter:image)["']/gi);
+  for (const m of metaOg2) {
+    if (m[1].match(/\.(jpg|jpeg|png|webp|avif)/i) || m[1].includes('/storage/') || m[1].includes('/images/')) {
+      imageSet.add(m[1].split('?')[0]);
+    }
+  }
+
+  const imagenes = Array.from(imageSet).filter((u: string) =>
+    !u.includes('icon') && !u.includes('logo') && !u.includes('favicon') &&
+    !u.includes('avatar') && !u.includes('spinner') && u.length > 20
+  );
+
+  const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i) || html.match(/<h1[^>]*>([^<]+)<\/h1>/i) || html.match(/^#\s+(.+)$/m);
+  const titulo = titleMatch ? titleMatch[1].replace(/\|.*$/, '').trim() : 'Propiedad';
+  const precioMatch = html.match(/[€$]\s*([\d.,]+(?:\.\d{3})*(?:,\d{2})?)/);
+  const precio = precioMatch ? (parseInt(precioMatch[1].replace(/\./g, '')) || 0) : 0;
+  const habMatch = html.match(/(\d+)\s*(?:hab|dormitorio|bedroom)/i);
+  const habitaciones = habMatch ? parseInt(habMatch[1]) : 0;
+  const m2Match = html.match(/(\d+)\s*m[²2]/i);
+  const m2 = m2Match ? parseInt(m2Match[1]) : 0;
+
+  const textoLimpio = html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 5000);
+  const banos = 0;
+  const urlOriginal = url;
+  return { titulo, precio, habitaciones, banos, m2, imagenes, textoLimpio, urlOriginal };
+}
+
+export async function extraerDatosPropiedad(url: string) {
+  const res = await fetch(url, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+      'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
+      'Accept-Encoding': 'gzip, deflate, br',
+      'Cache-Control': 'no-cache',
+      'Pragma': 'no-cache',
+      'Sec-Fetch-Dest': 'document',
+      'Sec-Fetch-Mode': 'navigate',
+      'Sec-Fetch-Site': 'none',
+      'Sec-Fetch-User': '?1',
+      'Upgrade-Insecure-Requests': '1',
+    },
+  });
+  
+  const html = await res.text();
+  if (!res.ok || html.includes('Just a moment') || html.includes('cf-browser-verification') || html.includes('Checking your browser')) {
+    console.log(`[Ingestion] Bloqueo detectado (HTTP ${res.status}) — usando Apify...`);
+    // Usar Apify para bypassear Cloudflare
+    // Usar Apify website-content-crawler (plan free)
+    const runRes = await fetch(
+      `https://api.apify.com/v2/acts/apify~website-content-crawler/run-sync-get-dataset-items?token=${process.env.APIFY_API_KEY}&timeout=90`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          startUrls: [{ url }],
+          maxCrawlPages: 1,
+          crawlerType: 'playwright:firefox',
+          saveHtml: true,
+          htmlTransformer: 'none',
+          removeElementsCssSelector: 'dummy_keep_everything',
+          removeCookieWarnings: true,
+          dynamicContentWaitSecs: 5,
+        }),
+      }
+    );
+    if (!runRes.ok) throw new Error('Apify run error: ' + runRes.status);
+    const items = await runRes.json();
+    console.log('[Ingestion] Apify item keys:', items?.[0] ? Object.keys(items[0]).join(', ') : 'sin items');
+    const apifyHtml = items?.[0]?.html || '';
+    if (!apifyHtml) throw new Error('Apify no devolvió HTML');
+    console.log('[Ingestion] HTML length:', apifyHtml.length, '| imgs en html:', (apifyHtml.match(/<img/g) || []).length);
+    return extraerDatosDeHtml(apifyHtml, url);
+  }
+  const urlBase = new URL(url);
+
+  // Extraer imágenes — formato clásico (src/data-src/srcset con extensión)
+  const imageSet = new Set<string>();
+  const srcMatches = html.matchAll(/(?:src|data-src|data-lazy)=["']([^"']+\.(jpg|jpeg|png|webp|avif)[^"']*)/gi);
+  for (const m of srcMatches) {
+    const imgUrl = m[1].startsWith('http') ? m[1] : `${urlBase.origin}${m[1].startsWith('/') ? '' : '/'}${m[1]}`;
+    imageSet.add(imgUrl.split('?')[0]);
+  }
+  const srcsetMatches = html.matchAll(/srcset=["']([^"']+)/gi);
+  for (const m of srcsetMatches) {
+    m[1].split(',').forEach(s => {
+      const u = s.trim().split(' ')[0];
+      if (u.match(/\.(jpg|jpeg|png|webp|avif)/i)) {
+        const imgUrl = u.startsWith('http') ? u : `${urlBase.origin}${u.startsWith('/') ? '' : '/'}${u}`;
+        imageSet.add(imgUrl.split('?')[0]);
+      }
+    });
+  }
+
+  // Extraer imágenes WordPress — normalizar eliminando sufijos de tamaño "-NNNxNNN"
+  const wpMatches = html.matchAll(/https?:\/\/[^"'\s]+\/wp-content\/uploads\/[^"'\s]+\.(?:jpg|jpeg|png|webp)/gi);
+  for (const m of wpMatches) {
+    // Coger versión original eliminando sufijo de tamaño (-1024x622, etc.)
+    const original = m[0].replace(/-\d+x\d+(\.(?:jpg|jpeg|png|webp))$/, '$1');
+    imageSet.add(original);
+  }
+
+  // Extraer imágenes de galerías WordPress — href en <a class="proj_gallery__cell"> o similar
+  const galleryHrefMatches = html.matchAll(/class="[^"]*(?:gallery|lightbox|proj_gallery)[^"]*"[^>]*href="(https?:\/\/[^"]+\.(?:jpg|jpeg|png|webp)[^"]*)"/gi);
+  for (const m of galleryHrefMatches) {
+    imageSet.add(m[1].split('?')[0]);
+  }
+  // También capturar href directos en anchors con imágenes
+  const anchorHrefMatches = html.matchAll(/<a[^>]+href="(https?:\/\/[^"]+\/wp-content\/uploads\/[^"]+\.(?:jpg|jpeg|png|webp))"[^>]*>/gi);
+  for (const m of anchorHrefMatches) {
+    // Solo URLs sin sufijos de tamaño (-NNNxNNN) — son los originales a full res
+    if (!m[1].match(/-\d+x\d+\.(?:jpg|jpeg|png|webp)$/i)) {
+      imageSet.add(m[1].split('?')[0]);
+    }
+  }
+
+  // Método 3: wp-content URLs sin sufijo de tamaño — captura todo lo que se perdió
+  const wpAllMatches = html.matchAll(/https?:\/\/[^"'\s]+\/wp-content\/uploads\/[^"'\s]+\.(?:jpg|jpeg|png|webp)/gi);
+  for (const m of wpAllMatches) {
+    if (!m[0].match(/-\d+x\d+\.(?:jpg|jpeg|png|webp)$/i)) {
+      const clean = m[0].split('?')[0];
+      if (!clean.includes('favicon') && !clean.includes('cropped')) {
+        imageSet.add(clean);
+      }
+    }
+  }
+
+  // Extraer imágenes de CDNs sin extensión en la URL (Uploadcare, Imgix, Cloudinary, etc.)
+  // Patrón: dominio-cdn.com/{uuid}/ con transformaciones tipo /-/format/webp/
+  const cdnMatches = html.matchAll(/https:\/\/(?:uploadcare\.[a-z.]+|[\w-]+\.cloudinary\.com|[\w-]+\.imgix\.net)\/[a-f0-9-]{36}\/[^"'\s)]*/gi);
+  for (const m of cdnMatches) {
+    // Normalizar a la versión de mayor calidad/resolución disponible
+    const base = m[0].split('/-/')[0];
+    imageSet.add(`${base}/-/format/jpeg/-/resize/2000x/-/quality/best/`);
+  }
+
+  // og:image y twitter:image
+  const metaOgMain = html.matchAll(/<meta[^>]+(?:property|name)=["'](?:og:image|twitter:image)["'][^>]+content=["']([^"']+)["']/gi);
+  for (const m of metaOgMain) {
+    if (m[1].match(/\.(jpg|jpeg|png|webp|avif)/i) || m[1].includes('/storage/') || m[1].includes('/images/')) {
+      imageSet.add(m[1].split('?')[0]);
+    }
+  }
+  const metaOgMain2 = html.matchAll(/<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["'](?:og:image|twitter:image)["']/gi);
+  for (const m of metaOgMain2) {
+    if (m[1].match(/\.(jpg|jpeg|png|webp|avif)/i) || m[1].includes('/storage/') || m[1].includes('/images/')) {
+      imageSet.add(m[1].split('?')[0]);
+    }
+  }
+
+  const imagenes = Array.from(imageSet).filter(u =>
+    !u.includes('icon') && !u.includes('logo') && !u.includes('favicon') &&
+    !u.includes('avatar') && !u.includes('spinner') && u.length > 20
+  );
+
+  // Extraer texto visible
+  const textoLimpio = html
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 5000);
+
+  // Extraer precio
+  // Precio — soporta "€ 795 000", "795.000 €", "795,000€"
+  const precioMatch =
+    textoLimpio.match(/(?:€|EUR)\s*([\d][\d\s.,]+)/i) ||
+    textoLimpio.match(/Price\s*(?:€|EUR)?\s*([\d][\d\s.,]+)/i) ||
+    textoLimpio.match(/([\d][\d\s.,]+)\s*(?:€|EUR)/i);
+  const precio = precioMatch
+    ? parseFloat(precioMatch[1].replace(/\s/g, '').replace(/\./g, '').replace(',', '.'))
+    : 0;
+
+  // Extraer habitaciones
+  // Habitaciones — buscar específicamente "Bedrooms N" o "N hab/dormitor"
+  const habMatch =
+    textoLimpio.match(/Bedrooms?\s*(\d+)/i) ||
+    textoLimpio.match(/(\d+)\s*(?:Bedrooms?|hab(?:itaciones?)?|dormitor)/i);
+  const habitaciones = habMatch ? parseInt(habMatch[1]) : 0;
+
+  // Extraer baños
+  // Baños
+  const banosMatch =
+    textoLimpio.match(/Bathrooms?\s*(\d+)/i) ||
+    textoLimpio.match(/(\d+)\s*(?:Bathrooms?|ba[ñn]os?|aseos?)/i);
+  const banos = banosMatch ? parseInt(banosMatch[1]) : 0;
+
+  // Extraer m2
+  // m2 — buscar Area N o N m²
+  const m2Match =
+    textoLimpio.match(/(?:Area|Built|interior|superficie)\s*(\d+)/i) ||
+    textoLimpio.match(/(\d+)\s*m[²2]/i);
+  const m2 = m2Match ? parseInt(m2Match[1]) : 0;
+
+  // Extraer título de la página
+  const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+  const tituloRaw = titleMatch ? titleMatch[1].replace(/\s*[-|–—].*$/, '').trim() : 'Propiedad';
+  const titulo = tituloRaw.replace(/&#\d+;/g, ' ').replace(/&[a-z]+;/g, ' ').replace(/\s+/g, ' ').trim();
+
+  console.log(`[Ingestion] Extraído: ${titulo} | €${precio} | ${habitaciones}hab | ${imagenes.length} imágenes`);
+
+  return { titulo, precio, habitaciones, banos, m2, imagenes, textoLimpio, urlOriginal: url };
+}
+
+// 2. GENERAR DESCRIPCIÓN EDITORIAL CON NVIDIA
+async function generarDescripcion(datos: any): Promise<{ es: string; en: string }> {
+  const nvidiaKey = process.env.NVIDIA_API_KEY!;
+
+  const prompt = `Eres el editor de contenidos de The Edit Marbella, agencia inmobiliaria de lujo en la Costa del Sol.
+
+Basándote en esta información de una propiedad, genera una descripción editorial de lujo:
+
+DATOS:
+${datos.textoLimpio.slice(0, 2000)}
+
+REGLAS:
+- Tono editorial, aspiracional, nunca comercial
+- 150-200 palabras
+- Destaca la experiencia de vivir ahí, no solo las características
+- En español e inglés
+- Mantén los datos reales (precio, habitaciones, m2) pero adapta el estilo
+
+Responde SOLO en JSON:
+{
+  "es": "descripción en español",
+  "en": "description in english"
+}`;
+
+  const res = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${nvidiaKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'meta/llama-3.1-8b-instruct',
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 600,
+      temperature: 0.7,
+    }),
+  });
+
+  const data = await res.json();
+  const text = data.choices?.[0]?.message?.content || '{}';
+  try {
+    const clean = text.replace(/```json|```/g, '').trim();
+    return JSON.parse(clean);
+  } catch {
+    return { es: datos.textoLimpio.slice(0, 200), en: datos.textoLimpio.slice(0, 200) };
+  }
+}
+
+// 3. SUBIR IMÁGENES A DRIVE Y OBTENER URLS PÚBLICAS
+async function subirImagenesDrive(imagenes: string[], nombrePropiedad: string): Promise<string[]> {
+    const drive = getDriveService();
+  const parentFolderId = process.env.GOOGLE_FOLDER_IMAGENES || "1ao8-TxyWx3mzD3YWvo0gDkODitJcWeYq";
+  console.log("[Drive] parentFolderId:", parentFolderId);
+
+  // Crear subcarpeta
+  const folder = await drive.files.create({
+    requestBody: {
+      name: nombrePropiedad,
+      mimeType: 'application/vnd.google-apps.folder',
+      parents: [parentFolderId],
+    },
+    fields: 'id',
+    supportsAllDrives: true,
+  });
+  const carpetaId = folder.data.id!;
+
+  const urls: string[] = [];
+  const { Readable } = await import('stream');
+
+  for (let i = 0; i < Math.min(imagenes.length, 30); i++) {
+    try {
+      const imgUrl = imagenes[i];
+      const imgDomain = new URL(imgUrl).origin;
+      const imgRes = await fetch(imgUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Referer': imgDomain + '/',
+          'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
+          'sec-fetch-dest': 'image',
+          'sec-fetch-mode': 'no-cors',
+          'sec-fetch-site': 'same-origin',
+        },
+      });
+      if (!imgRes.ok) {
+        console.log(`[Drive] Skip imagen ${i+1}: HTTP ${imgRes.status} — ${imgUrl.slice(0,80)}`);
+        continue;
+      }
+
+      const buffer = await imgRes.arrayBuffer();
+      const mimeType = imgRes.headers.get('content-type') || 'image/jpeg';
+      const ext = imagenes[i].split('.').pop()?.toLowerCase() || 'jpg';
+      const fileName = `${String(i + 1).padStart(3, '0')}.${ext}`;
+
+      const file = await drive.files.create({
+        requestBody: { name: fileName, parents: [carpetaId] },
+        media: { mimeType, body: Readable.from(Buffer.from(buffer)) },
+        fields: 'id',
+        supportsAllDrives: true,
+      });
+
+      // Hacer pública la imagen
+      await drive.permissions.create({
+        fileId: file.data.id!,
+        requestBody: { role: 'reader', type: 'anyone' },
+        supportsAllDrives: true,
+      });
+
+      const publicUrl = `/api/drive?id=${file.data.id}`;
+      urls.push(publicUrl);
+      console.log(`[Ingestion] Imagen ${i + 1}/${Math.min(imagenes.length, 30)} subida`);
+    } catch (e: any) {
+      console.error(`[Ingestion] Error imagen ${i}: ${e.message}`);
+    }
+  }
+
+  return urls;
+}
+
+// 4. INSERTAR EN SUPABASE
+async function insertarPropiedad(datos: any, descripcion: { es: string; en: string }, galeriaUrls: string[], slug: string) {
+  const supabase = getSupabase();
+
+  const { data, error } = await supabase.from('properties').insert({
+    slug,
+    titulo: { es: datos.titulo, en: datos.titulo, fr: datos.titulo, ru: datos.titulo },
+    descripcion: { es: descripcion.es, en: descripcion.en, fr: descripcion.es, ru: descripcion.es },
+    precio: datos.precio,
+    habitaciones: datos.habitaciones,
+    banos: datos.banos,
+    m2_construidos: datos.m2,
+    galeria_urls: galeriaUrls,
+    activa: true,
+    destacada: false,
+    tipo: 'villa',
+    zona: '',
+    ubicacion: '',
+  }).select().single();
+
+  if (error) throw new Error(error.message);
+  console.log(`[Ingestion] Propiedad insertada en Supabase: ${data.id}`);
+  return data;
+}
+
+// FLUJO COMPLETO
+export async function ingerirPropiedad(url: string, slug?: string): Promise<{
+  success: boolean;
+  propiedadId?: string;
+  galeriaUrls?: string[];
+  copyReel?: string;
+  error?: string;
+}> {
+  try {
+    console.log(`[Ingestion] Iniciando ingesta de: ${url}`);
+
+    // 1. Extraer datos
+    const datos = await extraerDatosPropiedad(url);
+
+    // 2. Generar slug si no se proporciona
+    const slugFinal = slug || datos.titulo
+      .toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9\s-]/g, '')
+      .replace(/\s+/g, '-')
+      .slice(0, 60);
+
+    // 3. Generar descripción
+    const descripcion = await generarDescripcion(datos);
+
+    // 4. Subir imágenes a Drive — con fallback a URLs directas si Drive falla
+    let galeriaUrls: string[] = [];
+    try {
+      galeriaUrls = await subirImagenesDrive(datos.imagenes, datos.titulo);
+    } catch(e: any) {
+      console.log('[TEM] Drive error:', e.message);
+    }
+
+    if (galeriaUrls.length === 0 && datos.imagenes.length > 0) {
+      console.log(`[TEM] Fallback URLs directas: ${datos.imagenes.length}`);
+      galeriaUrls = datos.imagenes.slice(0, 30);
+    }
+
+    // 4. Insertar en Supabase
+    const propiedad = await insertarPropiedad(datos, descripcion, galeriaUrls, slugFinal);
+
+    console.log(`[Ingestion] ✅ Flujo completado para ${datos.titulo}`);
+
+    return {
+      success: true,
+      propiedadId: propiedad.id,
+      galeriaUrls,
+      copyReel: undefined,
+    };
+
+  } catch (error: any) {
+    console.error('[Ingestion] Error:', error.message);
+    return { success: false, error: error.message };
+  }
+}
