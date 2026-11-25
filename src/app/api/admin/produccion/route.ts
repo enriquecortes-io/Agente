@@ -20,9 +20,23 @@ export async function GET(req: Request) {
   return json({ producciones: data });
 }
 
-// POST /api/admin/produccion { marca, guionId, carpeta } → crea y lanza la preparación
+// POST /api/admin/produccion { produccionId } → relanza una producción existente
+//      /api/admin/produccion { marca, guionId, carpeta } → crea y lanza una nueva
 export async function POST(req: Request) {
-  const { marca, guionId, carpeta } = await req.json();
+  const { marca, guionId, carpeta, produccionId } = await req.json();
+
+  if (produccionId) {
+    const sb = getSupabase();
+    const { data: prod, error: e1 } = await sb.from('producciones')
+      .select('id, carpeta_id').eq('id', produccionId).single();
+    if (e1 || !prod) return json({ error: 'Producción no encontrada' }, 404);
+    await sb.from('producciones')
+      .update({ estado: 'preparando', paso: 'En cola', error: null, actualizado_at: new Date().toISOString() })
+      .eq('id', produccionId);
+    await inngest.send({ name: 'produccion/preparar', data: { produccionId, carpetaId: prod.carpeta_id } });
+    return json({ ok: true, id: produccionId, mensaje: 'Relanzando producción.' });
+  }
+
   if (!MARCAS.includes(marca)) return json({ error: 'Marca no válida' }, 400);
   const carpetaId = extraerCarpetaId(String(carpeta || ''));
   if (!guionId || !carpetaId) return json({ error: 'Faltan el guion o la carpeta de Drive' }, 400);

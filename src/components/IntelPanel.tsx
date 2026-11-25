@@ -315,6 +315,17 @@ function Produccion({ guion, marca, T, btn, ghost, label }: any) {
     setTimeout(cargar, 1500);
   }
 
+  async function reintentar() {
+    setAviso('');
+    const res = await fetch('/api/admin/produccion', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ produccionId: prod.id }),
+    });
+    const d = await res.json();
+    setAviso(d.mensaje || d.error || '');
+    setTimeout(cargar, 1500);
+  }
+
   const plan = prod?.plan_montaje;
 
   return (
@@ -326,10 +337,16 @@ function Produccion({ guion, marca, T, btn, ghost, label }: any) {
         </div>
       )}
       {prod?.estado === 'preparando' && (
-        <div style={{ fontSize: '12px', color: T.cream }}>⏳ {prod.paso || 'Preparando…'}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: '12px', color: T.cream }}>⏳ {prod.paso || 'Preparando…'}</span>
+          <button onClick={reintentar} style={ghost}>Reintentar</button>
+        </div>
       )}
       {prod?.estado === 'error' && (
-        <div style={{ fontSize: '12px', color: '#e06c6c' }}>Error: {prod.error}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: '12px', color: '#e06c6c' }}>Error: {prod.error}</span>
+          <button onClick={reintentar} style={ghost}>Reintentar</button>
+        </div>
       )}
       {plan && (
         <div>
