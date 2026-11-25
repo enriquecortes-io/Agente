@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { fetchFile, toBlobURL } from '@ffmpeg/util';
+import IntelPanel from '../../components/IntelPanel.js';
 
 const DARK = '#111111';
 const SURFACE = '#1e1e1e';
@@ -19,8 +20,7 @@ const NAV = [
   { id: 'Panel',     icon: '○' },
   { id: 'Leads',     icon: '◈' },
   { id: 'Ingestión', icon: '◎' },
-  { id: 'Análisis',  icon: '◐' },
-  { id: 'Contenido', icon: '◑' },
+  { id: 'Inteligencia', icon: '◐' },
   { id: 'Campañas',  icon: '◉' },
   { id: 'Conversión', icon: '◈' },
   { id: 'Chat',      icon: '◇' },
@@ -73,9 +73,8 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (tab === 'Leads') fetchLeads();
-    if (tab === 'Análisis') fetchCompetencia();
     if (tab === 'Chat') fetchCalendar();
-    if (tab === 'Contenido') fetchPublicaciones();
+    if (tab === 'Inteligencia') fetchPublicaciones();
     if (tab === 'Campañas') fetchEmailLeads();
   }, [tab, project]);
 
@@ -390,7 +389,7 @@ export default function AdminPage() {
                 <div style={{borderTop:`1px solid ${BORDER}`,paddingTop:'28px'}}>
                   <div style={{fontSize:'10px',letterSpacing:'0.2em',color:MUTED,textTransform:'uppercase',marginBottom:'16px'}}>Acceso rápido</div>
                   <div style={{display:'flex',gap:'8px',flexWrap:'wrap' as const}}>
-                    {[['Ver leads calientes','Leads'],['Ingerir propiedad','Ingestión'],['Analizar competidor','Análisis'],['Generar publicación','Contenido']].map(([label,target])=>(
+                    {[['Ver leads calientes','Leads'],['Ingerir propiedad','Ingestión'],['Inteligencia de contenido','Inteligencia']].map(([label,target])=>(
                       <button key={label} onClick={()=>setTab(target)} style={{background:'none',border:`1px solid ${BORDER}`,borderRadius:'4px',padding:'9px 16px',color:MUTED,fontSize:'12px',letterSpacing:'0.05em',cursor:'pointer'}}>
                         {label} →
                       </button>
@@ -579,41 +578,9 @@ export default function AdminPage() {
               </div>
             )}
 
-            {/* ANÁLISIS */}
-            {tab==='Análisis' && (
-              <div>
-                <div style={{borderBottom:`1px solid ${BORDER}`,paddingBottom:'24px',marginBottom:'28px'}}>
-                  <div style={{fontSize:'11px',letterSpacing:'0.15em',color:MUTED,textTransform:'uppercase',marginBottom:'20px'}}>Analizar competidor</div>
-                  <div style={{display:'flex',gap:'8px'}}>
-                    <input value={competidorUsername} onChange={e=>setCompetidorUsername(e.target.value)} placeholder='@username Instagram' />
-                    <button onClick={analizarCompetidor} disabled={analizando} style={{background:accent,color:DARK,border:'none',borderRadius:'4px',padding:'10px 20px',fontSize:'12px',letterSpacing:'0.1em',textTransform:'uppercase',cursor:'pointer',whiteSpace:'nowrap' as const,fontWeight:'500'}}>
-                      {analizando?'Analizando...':'Analizar'}
-                    </button>
-                  </div>
-                </div>
-                {competencia.map((c,i)=>(
-                  <div key={i} style={{borderBottom:`1px solid ${BORDER}`,padding:'20px 0'}}>
-                    <div style={{display:'flex',justifyContent:'space-between',marginBottom:'8px'}}>
-                      <div style={{fontSize:'14px',color:CREAM,letterSpacing:'0.05em'}}>@{c.username}</div>
-                      <div style={{display:'flex',gap:'12px',alignItems:'center'}}>
-                        <span style={{fontSize:'11px',color:accent,letterSpacing:'0.08em'}}>{c.reels_analizados} reels</span>
-                        <span style={{fontSize:'11px',color:MUTED}}>{new Date(c.created_at).toLocaleDateString('es-ES')}</span>
-                      </div>
-                    </div>
-                    {c.analisis_raw&&(
-                      <details>
-                        <summary style={{fontSize:'11px',color:MUTED,letterSpacing:'0.1em',textTransform:'uppercase'}}>Ver análisis →</summary>
-                        <div style={{marginTop:'12px',fontSize:'13px',lineHeight:'1.8',color:MUTED}}>{c.analisis_raw.slice(0,800)}...</div>
-                      </details>
-                    )}
-                  </div>
-                ))}
-                {competencia.length===0&&<div style={{textAlign:'center',padding:'48px',color:MUTED,fontSize:'13px'}}>Sin análisis todavía</div>}
-              </div>
-            )}
-
             {/* CONTENIDO */}
-            {tab==='Contenido' && (
+            {tab==='Inteligencia' && (
+              <IntelPanel marca={project} theme={{accent,dark:DARK,surface:SURFACE,surface2:SURFACE2,border:BORDER,cream:CREAM,muted:MUTED}}>
               <div>
                 <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px',marginBottom:'16px'}}>
                   {([['titulo','Título'],['precio','Precio (€)'],['zona','Zona'],['habitaciones','Habitaciones'],['m2','m²'],['slug','Slug URL']] as [string,string][]).map(([k,l])=>(
@@ -643,6 +610,7 @@ export default function AdminPage() {
                   </div>
                 )}
               </div>
+              </IntelPanel>
             )}
 
             {/* CHAT */}

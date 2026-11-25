@@ -136,3 +136,78 @@ export const ingestPropertySolena = inngest.createFunction(
     return { ...result, debug: { imagenesEncontradas: datosBasicos.totalImagenes } };
   }
 );
+
+// ─── Reel Intel: competencia → patrones → plan de contenido ──
+export const reelIntel = inngest.createFunction(
+  {
+    id: 'reel-intel',
+    triggers: [{ event: 'reels/intel' }],
+    concurrency: { limit: 1, key: 'event.data.marca' },
+    timeouts: { finish: '30m' },
+  },
+  async ({ event, step }: any) => {
+    const RI = await import('../tools/reelIntelTools.js');
+    const marca = event.data.marca as 'tem' | 'solena' | 'smc';
+    const nGuiones = Number(event.data.nGuiones || 6);
+    const soloFuente: string | undefined = event.data.fuenteId;
+
+    const fuentes = await step.run('cargar-fuentes', async () => {
+      let q = RI.getSupabase().from('ig_fuentes').select('*').eq('marca', marca).eq('activa', true);
+      if (soloFuente) q = q.eq('id', soloFuente);
+      const { data, error } = await q;
+      if (error) throw new Error(error.message);
+      return data || [];
+    });
+    if (!fuentes.length) return { marca, aviso: 'Sin fuentes activas' };
+
+    // Un step por fuente: si una falla, Inngest reintenta solo esa
+    let scrapeados = 0;
+    for (const f of fuentes) {
+      scrapeados += await step.run(`scrape-${f.tipo}-${f.valor}`, async () => {
+        const reels = await RI.scrapeFuente(f, Number(event.data.limite || 30));
+        await RI.guardarReels(reels);
+        await RI.getSupabase().from('ig_fuentes').update({ ultimo_scrape: new Date().toISOString() }).eq('id', f.id);
+        return reels.length;
+      });
+    }
+
+    await step.run('recalcular-scores', () => RI.recalcularScores(marca));
+
+    // Un step por reel ganador para no chocar con el límite de tiempo
+    const pendientes = await step.run('top-sin-analizar', async () =>
+      (await RI.topReels(marca, Number(event.data.topN || 10), true)).map(r => r.id),
+    );
+    for (const id of pendientes) {
+      await step.run(`analizar-${id}`, async () => {
+        const sb = RI.getSupabase();
+        const { data: r } = await sb.from('ig_reels').select('*').eq('id', id).single();
+        const analisis = await RI.analizarReel(r);
+        await sb.from('ig_reels').update({ analisis, analizado: true }).eq('id', id);
+        return true;
+      });
+    }
+
+    const patron = await step.run('extraer-patrones', () => RI.extraerPatrones(marca));
+
+    const propiedades: string[] = event.data.propiedades || [];
+    const guiones = await step.run('generar-plan', () => RI.generarPlan(marca, patron.id, nGuiones, propiedades));
+
+    return { marca, fuentes: fuentes.length, scrapeados, analizados: pendientes.length, patronId: patron.id, guiones };
+  },
+);
+
+// Cron semanal: lunes 07:00 (Madrid) lanza el pipeline para cada marca con fuentes activas
+export const reelIntelSemanal = inngest.createFunction(
+  { id: 'reel-intel-semanal', triggers: [{ cron: 'TZ=Europe/Madrid 0 7 * * 1' }] },
+  async ({ step }: any) => {
+    const marcas = await step.run('marcas-activas', async () => {
+      const { getSupabase } = await import('../tools/reelIntelTools.js');
+      const { data } = await getSupabase().from('ig_fuentes').select('marca').eq('activa', true);
+      return [...new Set((data || []).map((d: any) => d.marca))];
+    });
+    if (marcas.length) {
+      await step.sendEvent('lanzar-por-marca', marcas.map((marca: string) => ({ name: 'reels/intel', data: { marca } })));
+    }
+    return { marcas };
+  },
+);
