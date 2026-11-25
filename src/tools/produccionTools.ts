@@ -25,13 +25,35 @@ export interface MediaCatalogada extends ArchivoDrive {
   etiquetas: string[];
 }
 
-function getDrive() {
-  const auth = new google.auth.OAuth2(
-    process.env.GOOGLE_OAUTH_CLIENT_ID,
-    process.env.GOOGLE_OAUTH_CLIENT_SECRET,
-  );
-  auth.setCredentials({ refresh_token: process.env.GOOGLE_OAUTH_REFRESH_TOKEN });
+/**
+ * Cuenta de servicio: no caduca nunca, pero solo ve lo que se le haya
+ * compartido. Es la vía preferente; OAuth queda como alternativa porque
+ * sus refresh tokens mueren si la pantalla de consentimiento está en
+ * modo "Testing".
+ */
+function getDriveServicio() {
+  const email = process.env.GOOGLE_CLIENT_EMAIL;
+  const key = process.env.GOOGLE_PRIVATE_KEY;
+  if (!email || !key) return null;
+  const auth = new google.auth.GoogleAuth({
+    credentials: { client_email: email, private_key: key.replace(/\\n/g, '\n') },
+    scopes: ['https://www.googleapis.com/auth/drive.readonly'],
+  });
+  return google.drive({ version: 'v3', auth: auth as any });
+}
+
+function getDriveOAuth() {
+  const { GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET, GOOGLE_OAUTH_REFRESH_TOKEN } = process.env;
+  if (!GOOGLE_OAUTH_CLIENT_ID || !GOOGLE_OAUTH_REFRESH_TOKEN) return null;
+  const auth = new google.auth.OAuth2(GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET);
+  auth.setCredentials({ refresh_token: GOOGLE_OAUTH_REFRESH_TOKEN });
   return google.drive({ version: 'v3', auth });
+}
+
+let driveActivo: any = null;
+
+function getDrive() {
+  return driveActivo || getDriveServicio() || getDriveOAuth();
 }
 
 /** Acepta tanto un id suelto como la URL completa de la carpeta de Drive. */
@@ -40,8 +62,37 @@ export function extraerCarpetaId(entrada: string): string {
   return (m ? m[1] : entrada).trim();
 }
 
+/**
+ * Prueba cada vía de acceso y se queda con la primera que vea archivos, para
+ * que un refresh token caducado no bloquee si la cuenta de servicio sí tiene
+ * acceso (y al revés).
+ */
 export async function listarCarpeta(carpetaId: string): Promise<ArchivoDrive[]> {
-  const drive = getDrive();
+  const vias: [string, any][] = [['cuenta de servicio', getDriveServicio()], ['OAuth', getDriveOAuth()]];
+  const fallos: string[] = [];
+
+  for (const [nombre, drive] of vias) {
+    if (!drive) continue;
+    try {
+      const archivos = await listarCon(drive, carpetaId);
+      if (archivos.length) {
+        driveActivo = drive;
+        return archivos;
+      }
+      fallos.push(`${nombre}: sin acceso o carpeta vacía`);
+    } catch (e: any) {
+      fallos.push(`${nombre}: ${e.message}`);
+    }
+  }
+
+  const cuenta = process.env.GOOGLE_CLIENT_EMAIL;
+  throw new Error(
+    `No se pudo leer la carpeta de Drive (${fallos.join(' | ')}). ` +
+    (cuenta ? `Comparte la carpeta con ${cuenta} como lector.` : 'Falta configurar el acceso a Drive.'),
+  );
+}
+
+async function listarCon(drive: any, carpetaId: string): Promise<ArchivoDrive[]> {
   const archivos: ArchivoDrive[] = [];
   let pageToken: string | undefined;
 
@@ -84,6 +135,7 @@ async function descargarParaAnalisis(a: ArchivoDrive): Promise<string | null> {
   }
   try {
     const drive = getDrive();
+    if (!drive) return null;
     const res = await drive.files.get(
       { fileId: a.drive_file_id, alt: 'media', supportsAllDrives: true },
       { responseType: 'arraybuffer' },
