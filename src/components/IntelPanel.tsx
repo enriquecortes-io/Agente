@@ -268,6 +268,8 @@ export default function IntelPanel({ marca, theme, children }: { marca: Marca; t
                   <button onClick={() => navigator.clipboard.writeText(`${g.caption}\n\n${(g.hashtags || []).join(' ')}`)} style={{ ...ghost, marginTop: '8px' }}>Copiar caption</button>
                 </div>
               )}
+
+              <Produccion guion={g} marca={marca} T={T} btn={btn} ghost={ghost} label={label} />
             </div>
           ))}
           {!data.plan.length && <div style={{ color: T.muted, fontSize: '13px', padding: '32px 0', textAlign: 'center' }}>Sin guiones todavía.</div>}
@@ -276,6 +278,94 @@ export default function IntelPanel({ marca, theme, children }: { marca: Marca; t
 
       {/* COPY PROPIEDAD (el generador anterior de Contenido) */}
       {sub === 'copy' && children}
+    </div>
+  );
+}
+
+// Producción de un guion: carpeta de Drive → material emparejado plano a plano
+function Produccion({ guion, marca, T, btn, ghost, label }: any) {
+  const [prod, setProd] = useState<any>(null);
+  const [carpeta, setCarpeta] = useState('');
+  const [abierto, setAbierto] = useState(false);
+  const [aviso, setAviso] = useState('');
+
+  async function cargar() {
+    const res = await fetch(`/api/admin/produccion?marca=${marca}`);
+    const d = await res.json();
+    setProd((d.producciones || []).find((p: any) => p.guion_id === guion.id) || null);
+  }
+  useEffect(() => { cargar(); }, [guion.id, marca]);
+
+  // Mientras prepara, refresca para ver el paso actual
+  useEffect(() => {
+    if (prod?.estado !== 'preparando') return;
+    const t = setInterval(cargar, 5000);
+    return () => clearInterval(t);
+  }, [prod?.estado]);
+
+  async function producir() {
+    if (!carpeta.trim()) { setAviso('Pega el enlace de la carpeta de Drive con las fotos'); return; }
+    setAviso('');
+    const res = await fetch('/api/admin/produccion', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ marca, guionId: guion.id, carpeta }),
+    });
+    const d = await res.json();
+    setAviso(d.mensaje || d.error || '');
+    setTimeout(cargar, 1500);
+  }
+
+  const plan = prod?.plan_montaje;
+
+  return (
+    <div style={{ borderTop: `1px solid ${T.border}`, marginTop: '14px', paddingTop: '14px' }}>
+      {!prod && (
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          <input value={carpeta} onChange={e => setCarpeta(e.target.value)} placeholder='Enlace de la carpeta de Drive con fotos/vídeos' style={{ flex: 1, minWidth: '220px' }} />
+          <button onClick={producir} style={btn}>Producir</button>
+        </div>
+      )}
+      {prod?.estado === 'preparando' && (
+        <div style={{ fontSize: '12px', color: T.cream }}>⏳ {prod.paso || 'Preparando…'}</div>
+      )}
+      {prod?.estado === 'error' && (
+        <div style={{ fontSize: '12px', color: '#e06c6c' }}>Error: {prod.error}</div>
+      )}
+      {plan && (
+        <div>
+          <button onClick={() => setAbierto(!abierto)} style={{ ...ghost, border: 'none', padding: 0, color: T.accent }}>
+            {abierto ? 'Ocultar plan de montaje' : `Plan de montaje listo · ${plan.planos?.length || 0} planos →`}
+          </button>
+          {abierto && (
+            <div style={{ marginTop: '10px' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                <thead><tr>{['#', 'Material elegido', 'Dur.', 'Movimiento', 'Motivo'].map(h => <th key={h} style={{ ...label, textAlign: 'left', padding: '6px 8px', borderBottom: `1px solid ${T.border}` }}>{h}</th>)}</tr></thead>
+                <tbody>
+                  {(plan.planos || []).map((p: any, i: number) => (
+                    <tr key={i}>
+                      <td style={{ padding: '8px', borderBottom: `1px solid ${T.border}`, color: T.muted }}>{i + 1}</td>
+                      <td style={{ padding: '8px', borderBottom: `1px solid ${T.border}`, color: T.cream }}>
+                        {p.drive_file_id
+                          ? <a href={`https://drive.google.com/file/d/${p.drive_file_id}/view`} target='_blank' rel='noreferrer' style={{ color: T.cream }}>{p.descripcion_media || p.nombre} ↗</a>
+                          : <span style={{ color: '#e06c6c' }}>sin material</span>}
+                      </td>
+                      <td style={{ padding: '8px', borderBottom: `1px solid ${T.border}`, color: T.muted }}>{p.duracion_seg}s</td>
+                      <td style={{ padding: '8px', borderBottom: `1px solid ${T.border}`, color: T.muted }}>{p.movimiento}</td>
+                      <td style={{ padding: '8px', borderBottom: `1px solid ${T.border}`, color: T.muted }}>{p.motivo}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {!!plan.falta?.length && (
+                <div style={{ fontSize: '12px', color: T.muted, marginTop: '10px' }}>
+                  <b style={{ color: T.accent }}>Material que falta:</b> {plan.falta.join(' · ')}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+      {aviso && <div style={{ fontSize: '12px', color: T.accent, marginTop: '8px' }}>{aviso}</div>}
     </div>
   );
 }

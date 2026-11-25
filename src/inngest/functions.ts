@@ -229,6 +229,43 @@ export const reelIntel = inngest.createFunction(
   },
 );
 
+// ─── Producción: guion ganador + material real → plan de montaje ──
+export const produccionPreparar = inngest.createFunction(
+  {
+    id: 'produccion-preparar',
+    triggers: [{ event: 'produccion/preparar' }],
+    concurrency: { limit: 1, key: 'event.data.carpetaId' },
+    timeouts: { finish: '30m' },
+  },
+  async ({ event, step }: any) => {
+    const P = await import('../tools/produccionTools.js');
+    const produccionId = event.data.produccionId as string;
+    const carpetaId = event.data.carpetaId as string;
+
+    try {
+      // Catalogar por lotes: cada lote es un step para que Inngest reintente
+      // solo el que falle y no se pierda lo ya analizado.
+      let total = 0;
+      for (let i = 0; i < 40; i++) {
+        const r = await step.run(`catalogar-lote-${i}`, async () => {
+          await P.marcarPasoProduccion(produccionId, `Catalogando material (lote ${i + 1})`);
+          return P.catalogarLote(carpetaId);
+        });
+        total += r.analizadas;
+        if (!r.pendientes) break;
+      }
+
+      await P.marcarPasoProduccion(produccionId, 'Emparejando material con el guion');
+      const plan = await step.run('emparejar', () => P.emparejarGuion(produccionId));
+
+      return { produccionId, catalogadas: total, planos: plan.planos?.length || 0 };
+    } catch (e: any) {
+      await P.cerrarProduccionConError(produccionId, e.message || String(e));
+      throw e;
+    }
+  },
+);
+
 // Cron lunes y jueves 07:00 (Madrid): lanza el pipeline para cada marca con fuentes activas
 export const reelIntelSemanal = inngest.createFunction(
   { id: 'reel-intel-semanal', triggers: [{ cron: 'TZ=Europe/Madrid 0 7 * * 1,4' }] },
