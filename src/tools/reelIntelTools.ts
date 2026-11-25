@@ -310,28 +310,33 @@ export async function llm(system: string, content: Content, maxTokens = 4000): P
   // devolviendo prosa alrededor del JSON.
   const googleKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GEMINI_API_KEY;
   if (googleKey) {
-    const texto = typeof content === 'string'
-      ? content
-      : content.filter(c => c.type === 'text').map(c => (c as any).text).join('\n');
-    const modelo = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent?key=${googleKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: system }] },
-          contents: [{ role: 'user', parts: [{ text: texto }] }],
-          generationConfig: { maxOutputTokens: maxTokens, temperature: 0.5, responseMimeType: 'application/json' },
-        }),
-      },
-    );
-    const data = await res.json();
-    if (!res.ok) throw new Error(`Gemini ${res.status}: ${JSON.stringify(data).slice(0, 300)}`);
-    const partes = data.candidates?.[0]?.content?.parts || [];
-    const salida = partes.map((p: any) => p.text || '').join('');
-    if (salida) return salida;
-    // Si Gemini no devolvió texto (p.ej. cortado por safety), cae a NVIDIA.
+    try {
+      const texto = typeof content === 'string'
+        ? content
+        : content.filter(c => c.type === 'text').map(c => (c as any).text).join('\n');
+      const modelo = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent?key=${googleKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: system }] },
+            contents: [{ role: 'user', parts: [{ text: texto }] }],
+            generationConfig: { maxOutputTokens: maxTokens, temperature: 0.5, responseMimeType: 'application/json' },
+          }),
+        },
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(`Gemini ${res.status}: ${JSON.stringify(data).slice(0, 300)}`);
+      const partes = data.candidates?.[0]?.content?.parts || [];
+      const salida = partes.map((p: any) => p.text || '').join('');
+      if (salida) return salida;
+      throw new Error('Gemini no devolvió texto (posible corte por safety o longitud)');
+    } catch (e: any) {
+      // Cuota agotada, error de red, etc.: cae a NVIDIA en vez de tumbar el pipeline.
+      console.error('[ReelIntel] Gemini falló, usando NVIDIA de respaldo:', e.message);
+    }
   }
 
   // Último recurso: NVIDIA (solo texto)
