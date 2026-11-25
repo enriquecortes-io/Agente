@@ -196,11 +196,19 @@ export const reelIntel = inngest.createFunction(
       for (let i = 0; i < pendientes.length; i++) {
         const id = pendientes[i];
         await RI.marcarPaso(runId, `Analizando reel ganador ${i + 1}/${pendientes.length}`);
+        // Si el modelo falla (p.ej. respuesta no-JSON de un reel en concreto), se marca
+        // como analizado sin desglose y se continúa: un reel problemático no debe
+        // bloquear el resto del pipeline ni consumir los reintentos de Inngest.
         await step.run(`analizar-${id}`, async () => {
           const sb = RI.getSupabase();
           const { data: r } = await sb.from('ig_reels').select('*').eq('id', id).single();
-          const analisis = await RI.analizarReel(r);
-          await sb.from('ig_reels').update({ analisis, analizado: true }).eq('id', id);
+          try {
+            const analisis = await RI.analizarReel(r);
+            await sb.from('ig_reels').update({ analisis, analizado: true }).eq('id', id);
+          } catch (e: any) {
+            console.error(`[ReelIntel] Reel ${id} no se pudo analizar, se omite:`, e.message);
+            await sb.from('ig_reels').update({ analizado: true }).eq('id', id);
+          }
           return true;
         });
       }
