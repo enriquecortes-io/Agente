@@ -279,7 +279,7 @@ export async function topReels(marca: Marca, n = 12, soloSinAnalizar = false, di
   return (data || []) as ReelRow[];
 }
 
-// ─── 3. LLM (Claude, con NVIDIA de respaldo) ───────────────────
+// ─── 3. LLM (Claude → Gemini → NVIDIA, por orden de disponibilidad) ──
 
 type Content = string | Array<{ type: 'text'; text: string } | { type: 'image'; source: { type: 'url'; url: string } }>;
 
@@ -305,9 +305,38 @@ export async function llm(system: string, content: Content, maxTokens = 4000): P
     return (data.content || []).filter((b: any) => b.type === 'text').map((b: any) => b.text).join('');
   }
 
-  // Respaldo: NVIDIA (solo texto)
+  // Respaldo: Gemini (ya configurado en el proyecto para otras funciones, sin coste adicional).
+  // Fuerza response_mime_type JSON para evitar el problema típico de NVIDIA/Llama
+  // devolviendo prosa alrededor del JSON.
+  const googleKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GEMINI_API_KEY;
+  if (googleKey) {
+    const texto = typeof content === 'string'
+      ? content
+      : content.filter(c => c.type === 'text').map(c => (c as any).text).join('\n');
+    const modelo = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent?key=${googleKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: system }] },
+          contents: [{ role: 'user', parts: [{ text: texto }] }],
+          generationConfig: { maxOutputTokens: maxTokens, temperature: 0.5, responseMimeType: 'application/json' },
+        }),
+      },
+    );
+    const data = await res.json();
+    if (!res.ok) throw new Error(`Gemini ${res.status}: ${JSON.stringify(data).slice(0, 300)}`);
+    const partes = data.candidates?.[0]?.content?.parts || [];
+    const salida = partes.map((p: any) => p.text || '').join('');
+    if (salida) return salida;
+    // Si Gemini no devolvió texto (p.ej. cortado por safety), cae a NVIDIA.
+  }
+
+  // Último recurso: NVIDIA (solo texto)
   const nvidiaKey = process.env.NVIDIA_API_KEY;
-  if (!nvidiaKey) throw new Error('Falta ANTHROPIC_API_KEY (o NVIDIA_API_KEY)');
+  if (!nvidiaKey) throw new Error('Falta ANTHROPIC_API_KEY, GOOGLE_GENERATIVE_AI_API_KEY/GEMINI_API_KEY o NVIDIA_API_KEY');
   const texto = typeof content === 'string'
     ? content
     : content.filter(c => c.type === 'text').map(c => (c as any).text).join('\n');
