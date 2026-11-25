@@ -349,13 +349,15 @@ export async function llm(system: string, content: Content, maxTokens = 4000): P
     method: 'POST',
     headers: { Authorization: `Bearer ${nvidiaKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: 'meta/llama-3.3-70b-instruct',
+      model: process.env.NVIDIA_MODEL || 'qwen/qwen2.5-72b-instruct',
       messages: [{ role: 'system', content: system }, { role: 'user', content: texto }],
       max_tokens: maxTokens,
       temperature: 0.5,
+      response_format: { type: 'json_object' },
     }),
   });
   const data = await res.json();
+  if (!res.ok) throw new Error(`NVIDIA ${res.status}: ${JSON.stringify(data).slice(0, 300)}`);
   return data.choices?.[0]?.message?.content || '';
 }
 
