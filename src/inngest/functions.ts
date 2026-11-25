@@ -229,9 +229,9 @@ export const reelIntel = inngest.createFunction(
   },
 );
 
-// Cron semanal: lunes 07:00 (Madrid) lanza el pipeline para cada marca con fuentes activas
+// Cron lunes y jueves 07:00 (Madrid): lanza el pipeline para cada marca con fuentes activas
 export const reelIntelSemanal = inngest.createFunction(
-  { id: 'reel-intel-semanal', triggers: [{ cron: 'TZ=Europe/Madrid 0 7 * * 1' }] },
+  { id: 'reel-intel-semanal', triggers: [{ cron: 'TZ=Europe/Madrid 0 7 * * 1,4' }] },
   async ({ step }: any) => {
     const marcas = await step.run('marcas-activas', async () => {
       const { getSupabase } = await import('../tools/reelIntelTools.js');

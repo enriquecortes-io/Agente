@@ -102,7 +102,7 @@ export default function IntelPanel({ marca, theme, children }: { marca: Marca; t
           <div style={{ fontSize: '12px', color: T.muted, marginTop: '6px' }}>
             {data.fuentes.filter((f: any) => f.activa).length} fuentes activas
             {' '}({data.fuentes.filter((f: any) => f.activa && f.origen === 'auto').length} descubiertas solas)
-            {' '}· {data.reels.length} reels en ranking · se actualiza solo cada lunes 07:00
+            {' '}· {data.reels.length} reels en ranking · se actualiza solo lunes y jueves 07:00
           </div>
         </div>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
