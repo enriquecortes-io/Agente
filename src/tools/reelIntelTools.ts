@@ -361,13 +361,33 @@ export async function llm(system: string, content: Content, maxTokens = 4000): P
   return data.choices?.[0]?.message?.content || '';
 }
 
+const sinComasFinales = (s: string) => s.replace(/,\s*([}\]])/g, '$1');
+// Arriesgado: una URL dentro de una cadena contiene "//". Solo se intenta
+// como último recurso, cuando las reparaciones seguras ya han fallado.
+const sinComentarios = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|\s)\/\/[^\n\r]*/g, '$1');
+
 export function parseJSON<T = any>(texto: string): T {
   const limpio = texto.replace(/```json|```/g, '').trim();
-  try { return JSON.parse(limpio); } catch { /* sigue */ }
+
+  const candidatos = [limpio];
   const ini = limpio.search(/[\[{]/);
   const fin = Math.max(limpio.lastIndexOf('}'), limpio.lastIndexOf(']'));
-  if (ini >= 0 && fin > ini) return JSON.parse(limpio.slice(ini, fin + 1));
-  throw new Error('La respuesta del modelo no es JSON válido');
+  if (ini >= 0 && fin > ini) candidatos.push(limpio.slice(ini, fin + 1));
+
+  const reparaciones = [
+    (s: string) => s,
+    sinComasFinales,
+    (s: string) => sinComentarios(sinComasFinales(s)),
+  ];
+
+  for (const candidato of candidatos) {
+    for (const reparar of reparaciones) {
+      try { return JSON.parse(reparar(candidato)); } catch { /* siguiente */ }
+    }
+  }
+
+  // Sin el texto original es imposible saber qué devolvió el modelo
+  throw new Error(`La respuesta del modelo no es JSON válido. Devolvió: ${limpio.slice(0, 500)}`);
 }
 
 function resumenReel(r: ReelRow) {
