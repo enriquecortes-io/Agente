@@ -455,7 +455,7 @@ export async function extraerPatrones(marca: Marca, n = 15) {
   "evitar": [""],
   "adaptacion_a_marca": "cómo trasladar esto al tono de la marca sin copiar"
 }`,
-    3000,
+    5000,
   );
   const patrones = parseJSON(salida);
   const { data: fila, error } = await supabase
