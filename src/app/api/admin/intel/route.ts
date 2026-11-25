@@ -10,16 +10,18 @@ export async function GET(req: Request) {
   const marca = new URL(req.url).searchParams.get('marca') || 'tem';
   if (!MARCAS.includes(marca)) return json({ error: 'Marca no válida' }, 400);
   const sb = getSupabase();
-  const [fuentes, reels, patron, plan] = await Promise.all([
+  const [fuentes, reels, patron, plan, run] = await Promise.all([
     sb.from('ig_fuentes').select('*').eq('marca', marca).order('created_at'),
     sb.from('ig_reels').select('id,url,owner,caption,views,likes,comments,duracion_seg,publicado_at,thumbnail_url,outlier_score,engagement_rate,analizado,analisis')
       .eq('marca', marca).order('outlier_score', { ascending: false }).limit(30),
     sb.from('ig_patrones').select('*').eq('marca', marca).order('created_at', { ascending: false }).limit(1).maybeSingle(),
     sb.from('contenido_plan').select('*').eq('marca', marca).neq('estado', 'descartado').order('created_at', { ascending: false }).limit(40),
+    sb.from('ig_runs').select('*').eq('marca', marca).order('creado_at', { ascending: false }).limit(1).maybeSingle(),
   ]);
   const err = fuentes.error || reels.error || patron.error || plan.error;
   if (err) return json({ error: err.message }, 500);
-  return json({ fuentes: fuentes.data, reels: reels.data, patron: patron.data, plan: plan.data });
+  // ig_runs es opcional (puede no existir aún en bases ya desplegadas): no tumbar el resto si falla.
+  return json({ fuentes: fuentes.data, reels: reels.data, patron: patron.data, plan: plan.data, run: run.error ? null : run.data });
 }
 
 // POST /api/admin/intel { marca, nGuiones?, propiedades? } → lanza el pipeline en Inngest

@@ -151,55 +151,73 @@ export const reelIntel = inngest.createFunction(
     const nGuiones = Number(event.data.nGuiones || 6);
     const soloFuente: string | undefined = event.data.fuenteId;
 
-    const fuentes = await step.run('cargar-fuentes', async () => {
-      let q = RI.getSupabase().from('ig_fuentes').select('*').eq('marca', marca).eq('activa', true);
-      if (soloFuente) q = q.eq('id', soloFuente);
-      const { data, error } = await q;
-      if (error) throw new Error(error.message);
-      return data || [];
-    });
-    if (!fuentes.length) return { marca, aviso: 'Sin fuentes activas' };
+    const runId = await step.run('crear-run', () => RI.crearRun(marca));
 
-    // Un step por fuente: si una falla, Inngest reintenta solo esa
-    let scrapeados = 0;
-    let descubiertas = 0;
-    for (const f of fuentes) {
-      const resultado = await step.run(`scrape-${f.tipo}-${f.valor}`, async () => {
-        const reels = await RI.scrapeFuente(f, Number(event.data.limite || 30));
-        await RI.guardarReels(reels);
-        await RI.getSupabase().from('ig_fuentes').update({ ultimo_scrape: new Date().toISOString() }).eq('id', f.id);
-        // Las fuentes de hashtag/zona no apuntan a una cuenta conocida: de sus
-        // resultados, registra como nuevas fuentes 'cuenta' (auto) a quien más
-        // impacto tuvo, para que el sistema siga descubriendo competidores solo.
-        const nuevas = await RI.descubrirCuentas(f, reels);
-        return { n: reels.length, nuevas };
+    try {
+      const fuentes = await step.run('cargar-fuentes', async () => {
+        let q = RI.getSupabase().from('ig_fuentes').select('*').eq('marca', marca).eq('activa', true);
+        if (soloFuente) q = q.eq('id', soloFuente);
+        const { data, error } = await q;
+        if (error) throw new Error(error.message);
+        return data || [];
       });
-      scrapeados += resultado.n;
-      descubiertas += resultado.nuevas;
+      if (!fuentes.length) {
+        await RI.cerrarRun(runId, 'error', 'Sin fuentes activas');
+        return { marca, aviso: 'Sin fuentes activas' };
+      }
+
+      // Un step por fuente: si una falla, Inngest reintenta solo esa
+      let scrapeados = 0;
+      let descubiertas = 0;
+      for (let i = 0; i < fuentes.length; i++) {
+        const f = fuentes[i];
+        await RI.marcarPaso(runId, `Escaneando fuente ${i + 1}/${fuentes.length}: ${f.tipo === 'cuenta' ? '@' : f.tipo === 'hashtag' ? '#' : '📍'}${f.valor}`);
+        const resultado = await step.run(`scrape-${f.tipo}-${f.valor}`, async () => {
+          const reels = await RI.scrapeFuente(f, Number(event.data.limite || 30));
+          await RI.guardarReels(reels);
+          await RI.getSupabase().from('ig_fuentes').update({ ultimo_scrape: new Date().toISOString() }).eq('id', f.id);
+          // Las fuentes de hashtag/zona no apuntan a una cuenta conocida: de sus
+          // resultados, registra como nuevas fuentes 'cuenta' (auto) a quien más
+          // impacto tuvo, para que el sistema siga descubriendo competidores solo.
+          const nuevas = await RI.descubrirCuentas(f, reels);
+          return { n: reels.length, nuevas };
+        });
+        scrapeados += resultado.n;
+        descubiertas += resultado.nuevas;
+      }
+
+      await RI.marcarPaso(runId, 'Recalculando puntuaciones (outlier score)');
+      await step.run('recalcular-scores', () => RI.recalcularScores(marca));
+
+      // Un step por reel ganador para no chocar con el límite de tiempo
+      const pendientes = await step.run('top-sin-analizar', async () =>
+        (await RI.topReels(marca, Number(event.data.topN || 10), true)).map(r => r.id),
+      );
+      for (let i = 0; i < pendientes.length; i++) {
+        const id = pendientes[i];
+        await RI.marcarPaso(runId, `Analizando reel ganador ${i + 1}/${pendientes.length}`);
+        await step.run(`analizar-${id}`, async () => {
+          const sb = RI.getSupabase();
+          const { data: r } = await sb.from('ig_reels').select('*').eq('id', id).single();
+          const analisis = await RI.analizarReel(r);
+          await sb.from('ig_reels').update({ analisis, analizado: true }).eq('id', id);
+          return true;
+        });
+      }
+
+      await RI.marcarPaso(runId, 'Extrayendo patrones comunes');
+      const patron = await step.run('extraer-patrones', () => RI.extraerPatrones(marca));
+
+      await RI.marcarPaso(runId, `Generando ${nGuiones} guiones`);
+      const propiedades: string[] = event.data.propiedades || [];
+      const guiones = await step.run('generar-plan', () => RI.generarPlan(marca, patron.id, nGuiones, propiedades));
+
+      await RI.cerrarRun(runId, 'completado');
+      return { marca, fuentes: fuentes.length, scrapeados, descubiertas, analizados: pendientes.length, patronId: patron.id, guiones };
+    } catch (e: any) {
+      await RI.cerrarRun(runId, 'error', e.message || String(e));
+      throw e;
     }
-
-    await step.run('recalcular-scores', () => RI.recalcularScores(marca));
-
-    // Un step por reel ganador para no chocar con el límite de tiempo
-    const pendientes = await step.run('top-sin-analizar', async () =>
-      (await RI.topReels(marca, Number(event.data.topN || 10), true)).map(r => r.id),
-    );
-    for (const id of pendientes) {
-      await step.run(`analizar-${id}`, async () => {
-        const sb = RI.getSupabase();
-        const { data: r } = await sb.from('ig_reels').select('*').eq('id', id).single();
-        const analisis = await RI.analizarReel(r);
-        await sb.from('ig_reels').update({ analisis, analizado: true }).eq('id', id);
-        return true;
-      });
-    }
-
-    const patron = await step.run('extraer-patrones', () => RI.extraerPatrones(marca));
-
-    const propiedades: string[] = event.data.propiedades || [];
-    const guiones = await step.run('generar-plan', () => RI.generarPlan(marca, patron.id, nGuiones, propiedades));
-
-    return { marca, fuentes: fuentes.length, scrapeados, descubiertas, analizados: pendientes.length, patronId: patron.id, guiones };
   },
 );
 

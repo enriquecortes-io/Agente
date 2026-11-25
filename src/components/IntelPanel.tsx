@@ -25,7 +25,7 @@ const fmt = (n: number) => n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `$
 export default function IntelPanel({ marca, theme, children }: { marca: Marca; theme: Theme; children?: ReactNode }) {
   const T = theme;
   const [sub, setSub] = useState<Sub>('ranking');
-  const [data, setData] = useState<any>({ fuentes: [], reels: [], patron: null, plan: [] });
+  const [data, setData] = useState<any>({ fuentes: [], reels: [], patron: null, plan: [], run: null });
   const [cargando, setCargando] = useState(false);
   const [lanzando, setLanzando] = useState(false);
   const [aviso, setAviso] = useState('');
@@ -45,6 +45,13 @@ export default function IntelPanel({ marca, theme, children }: { marca: Marca; t
   }
   useEffect(() => { cargar(); }, [marca]);
 
+  // Mientras haya una ejecución en curso, sondea cada 4s para refrescar la barra de estado.
+  useEffect(() => {
+    if (data.run?.estado !== 'en_curso') return;
+    const t = setInterval(cargar, 4000);
+    return () => clearInterval(t);
+  }, [data.run?.estado, marca]);
+
   async function lanzar() {
     setLanzando(true); setAviso('');
     const res = await fetch('/api/admin/intel', {
@@ -54,6 +61,7 @@ export default function IntelPanel({ marca, theme, children }: { marca: Marca; t
     const d = await res.json();
     setAviso(d.mensaje || d.error || '');
     setLanzando(false);
+    setTimeout(cargar, 1500); // el run tarda ~1s en crearse en Inngest
   }
 
   async function addFuente() {
@@ -101,12 +109,24 @@ export default function IntelPanel({ marca, theme, children }: { marca: Marca; t
           <select value={nGuiones} onChange={e => setNGuiones(Number(e.target.value))} style={{ width: 'auto' }}>
             {[3, 6, 10].map(n => <option key={n} value={n}>{n} guiones</option>)}
           </select>
-          <button onClick={lanzar} disabled={lanzando || !data.fuentes.length} style={{ ...btn, opacity: data.fuentes.length ? 1 : 0.4 }}>
-            {lanzando ? 'Lanzando…' : 'Analizar y generar plan'}
+          <button onClick={lanzar} disabled={lanzando || data.run?.estado === 'en_curso' || !data.fuentes.length} style={{ ...btn, opacity: data.fuentes.length ? 1 : 0.4 }}>
+            {lanzando ? 'Lanzando…' : data.run?.estado === 'en_curso' ? 'En curso…' : 'Analizar y generar plan'}
           </button>
           <button onClick={cargar} style={ghost}>{cargando ? '…' : '↻'}</button>
         </div>
       </div>
+      {data.run?.estado === 'en_curso' && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: T.surface, border: `1px solid ${T.border}`, borderRadius: '4px', padding: '10px 14px', marginBottom: '16px' }}>
+          <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: T.accent, flexShrink: 0, animation: 'pulse 1.4s ease-in-out infinite' }} />
+          <span style={{ fontSize: '12px', color: T.cream }}>{data.run.paso || 'Trabajando…'}</span>
+          <style>{`@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.25; } }`}</style>
+        </div>
+      )}
+      {data.run?.estado === 'error' && (
+        <div style={{ fontSize: '12px', color: '#e06c6c', background: T.surface, border: `1px solid ${T.border}`, borderRadius: '4px', padding: '10px 14px', marginBottom: '16px' }}>
+          Última ejecución falló: {data.run.error || 'error desconocido'}
+        </div>
+      )}
       {aviso && <div style={{ fontSize: '12px', color: T.accent, marginBottom: '16px' }}>{aviso}</div>}
 
       {/* Sub-pestañas */}

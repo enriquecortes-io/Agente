@@ -48,6 +48,32 @@ export function getSupabase(): SupabaseClient {
   return createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
+// ─── Seguimiento en vivo de la ejecución (barra de estado) ─────
+
+export async function crearRun(marca: Marca): Promise<string> {
+  const { data, error } = await getSupabase().from('ig_runs')
+    .insert({ marca, estado: 'en_curso', paso: 'Arrancando…' })
+    .select('id').single();
+  if (error) throw new Error(error.message);
+  return data.id as string;
+}
+
+export async function marcarPaso(runId: string, paso: string) {
+  // No crítico: si falla (p.ej. tabla aún no migrada) no debe tumbar el pipeline.
+  try {
+    await getSupabase().from('ig_runs').update({ paso, actualizado_at: new Date().toISOString() }).eq('id', runId);
+  } catch { /* ignorar */ }
+}
+
+export async function cerrarRun(runId: string, estado: 'completado' | 'error', detalle?: string) {
+  try {
+    await getSupabase().from('ig_runs').update({
+      estado, paso: estado === 'completado' ? 'Completado' : 'Error', error: detalle || null,
+      actualizado_at: new Date().toISOString(),
+    }).eq('id', runId);
+  } catch { /* ignorar */ }
+}
+
 // ─── 1. SCRAPING ────────────────────────────────────────────────
 
 /**
