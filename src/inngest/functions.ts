@@ -162,13 +162,20 @@ export const reelIntel = inngest.createFunction(
 
     // Un step por fuente: si una falla, Inngest reintenta solo esa
     let scrapeados = 0;
+    let descubiertas = 0;
     for (const f of fuentes) {
-      scrapeados += await step.run(`scrape-${f.tipo}-${f.valor}`, async () => {
+      const resultado = await step.run(`scrape-${f.tipo}-${f.valor}`, async () => {
         const reels = await RI.scrapeFuente(f, Number(event.data.limite || 30));
         await RI.guardarReels(reels);
         await RI.getSupabase().from('ig_fuentes').update({ ultimo_scrape: new Date().toISOString() }).eq('id', f.id);
-        return reels.length;
+        // Las fuentes de hashtag/zona no apuntan a una cuenta conocida: de sus
+        // resultados, registra como nuevas fuentes 'cuenta' (auto) a quien más
+        // impacto tuvo, para que el sistema siga descubriendo competidores solo.
+        const nuevas = await RI.descubrirCuentas(f, reels);
+        return { n: reels.length, nuevas };
       });
+      scrapeados += resultado.n;
+      descubiertas += resultado.nuevas;
     }
 
     await step.run('recalcular-scores', () => RI.recalcularScores(marca));
@@ -192,7 +199,7 @@ export const reelIntel = inngest.createFunction(
     const propiedades: string[] = event.data.propiedades || [];
     const guiones = await step.run('generar-plan', () => RI.generarPlan(marca, patron.id, nGuiones, propiedades));
 
-    return { marca, fuentes: fuentes.length, scrapeados, analizados: pendientes.length, patronId: patron.id, guiones };
+    return { marca, fuentes: fuentes.length, scrapeados, descubiertas, analizados: pendientes.length, patronId: patron.id, guiones };
   },
 );
 

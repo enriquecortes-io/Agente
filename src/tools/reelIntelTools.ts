@@ -12,9 +12,10 @@ export type Marca = 'tem' | 'solena' | 'smc';
 export interface Fuente {
   id: string;
   marca: Marca;
-  tipo: 'cuenta' | 'hashtag';
+  tipo: 'cuenta' | 'hashtag' | 'zona';
   valor: string;
   activa: boolean;
+  origen?: 'manual' | 'auto';
 }
 
 export interface ReelRow {
@@ -49,20 +50,29 @@ export function getSupabase(): SupabaseClient {
 
 // ─── 1. SCRAPING ────────────────────────────────────────────────
 
-export async function scrapeFuente(fuente: Fuente, limite = 30): Promise<ReelRow[]> {
+/**
+ * Deriva hashtags semilla a partir de una zona libre ("Marbella", "Costa del Sol")
+ * para poder rastrear el sector en esa zona sin que el usuario tenga que
+ * buscar o teclear cuentas de competidores concretas.
+ */
+export function hashtagsDeZona(zona: string): string[] {
+  const slug = zona
+    .normalize('NFD').replace(/[̀-ͯ]/g, '') // quita acentos
+    .toLowerCase().replace(/[^a-z0-9]+/g, '');
+  if (!slug) return [];
+  return [...new Set([
+    slug,
+    `${slug}realestate`,
+    `${slug}inmobiliaria`,
+    `luxury${slug}`,
+  ])];
+}
+
+async function scrapeUrl(url: string, resultsType: 'reels' | 'posts', limite: number): Promise<any[]> {
   const apiKey = process.env.APIFY_API_KEY;
   if (!apiKey) throw new Error('Falta APIFY_API_KEY');
 
-  const url = fuente.tipo === 'cuenta'
-    ? `https://www.instagram.com/${fuente.valor.replace(/^@/, '')}/`
-    : `https://www.instagram.com/explore/tags/${fuente.valor.replace(/^#/, '')}/`;
-
-  const payload = {
-    directUrls: [url],
-    resultsType: fuente.tipo === 'cuenta' ? 'reels' : 'posts',
-    resultsLimit: limite,
-    addParentData: false,
-  };
+  const payload = { directUrls: [url], resultsType, resultsLimit: limite, addParentData: false };
 
   // Endpoint síncrono: lanza el actor y devuelve los items (máx. ~5 min)
   const res = await fetch(
@@ -74,8 +84,10 @@ export async function scrapeFuente(fuente: Fuente, limite = 30): Promise<ReelRow
     },
   );
   if (!res.ok) throw new Error(`Apify ${res.status}: ${(await res.text()).slice(0, 200)}`);
-  const items: any[] = await res.json();
+  return res.json();
+}
 
+function itemsAReels(items: any[], fuente: Fuente): ReelRow[] {
   return (items || [])
     .filter(i => i && !i.error && (i.type === 'Video' || i.productType === 'clips'))
     .map((i): ReelRow => ({
@@ -94,6 +106,69 @@ export async function scrapeFuente(fuente: Fuente, limite = 30): Promise<ReelRow
       thumbnail_url: i.displayUrl || null,
     }))
     .filter(r => r.short_code);
+}
+
+export async function scrapeFuente(fuente: Fuente, limite = 30): Promise<ReelRow[]> {
+  if (fuente.tipo === 'cuenta') {
+    const url = `https://www.instagram.com/${fuente.valor.replace(/^@/, '')}/`;
+    return itemsAReels(await scrapeUrl(url, 'reels', limite), fuente);
+  }
+
+  if (fuente.tipo === 'hashtag') {
+    const url = `https://www.instagram.com/explore/tags/${fuente.valor.replace(/^#/, '')}/`;
+    return itemsAReels(await scrapeUrl(url, 'posts', limite), fuente);
+  }
+
+  // tipo 'zona': rastrea varios hashtags derivados de la zona y combina resultados.
+  // Así se descubren reels (y, de ahí, cuentas) relevantes en una zona sin
+  // que el usuario tenga que localizar competidores uno a uno.
+  const tags = hashtagsDeZona(fuente.valor);
+  const porTag = Math.max(10, Math.ceil(limite / Math.max(tags.length, 1)));
+  const vistos = new Set<string>();
+  const reels: ReelRow[] = [];
+  for (const tag of tags) {
+    const url = `https://www.instagram.com/explore/tags/${tag}/`;
+    let items: any[] = [];
+    try { items = await scrapeUrl(url, 'posts', porTag); } catch (e: any) {
+      console.error(`[ReelIntel] Error rastreando zona "${fuente.valor}" vía #${tag}:`, e.message);
+      continue;
+    }
+    for (const r of itemsAReels(items, fuente)) {
+      if (vistos.has(r.short_code)) continue;
+      vistos.add(r.short_code);
+      reels.push(r);
+    }
+  }
+  return reels.slice(0, limite);
+}
+
+/**
+ * A partir de reels descubiertos vía hashtag/zona (no vía una cuenta ya
+ * conocida), registra automáticamente como nuevas fuentes tipo 'cuenta'
+ * (origen 'auto') a los perfiles que más impacto tuvieron, para que el
+ * sistema los siga vigilando por su cuenta en próximas ejecuciones.
+ * Limitado a `maxNuevas` por ejecución para no crecer sin control.
+ */
+export async function descubrirCuentas(fuente: Fuente, reels: ReelRow[], maxNuevas = 5): Promise<number> {
+  if (fuente.tipo === 'cuenta' || !reels.length) return 0;
+  const supabase = getSupabase();
+
+  const porCuenta = new Map<string, number>();
+  for (const r of reels) porCuenta.set(r.owner, Math.max(porCuenta.get(r.owner) || 0, r.views));
+  const candidatas = [...porCuenta.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, maxNuevas)
+    .map(([owner]) => owner);
+  if (!candidatas.length) return 0;
+
+  const { data, error } = await supabase.from('ig_fuentes')
+    .upsert(
+      candidatas.map(valor => ({ marca: fuente.marca, tipo: 'cuenta' as const, valor, activa: true, origen: 'auto' as const })),
+      { onConflict: 'marca,tipo,valor', ignoreDuplicates: true },
+    )
+    .select('id');
+  if (error) throw new Error(`Supabase ig_fuentes (descubrir): ${error.message}`);
+  return data?.length || 0;
 }
 
 export async function guardarReels(reels: ReelRow[]) {

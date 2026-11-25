@@ -29,7 +29,7 @@ export default function IntelPanel({ marca, theme, children }: { marca: Marca; t
   const [cargando, setCargando] = useState(false);
   const [lanzando, setLanzando] = useState(false);
   const [aviso, setAviso] = useState('');
-  const [nuevaTipo, setNuevaTipo] = useState<'cuenta' | 'hashtag'>('cuenta');
+  const [nuevaTipo, setNuevaTipo] = useState<'cuenta' | 'hashtag' | 'zona'>('zona');
   const [nuevaValor, setNuevaValor] = useState('');
   const [nGuiones, setNGuiones] = useState(6);
   const [abierto, setAbierto] = useState<string | null>(null);
@@ -92,7 +92,9 @@ export default function IntelPanel({ marca, theme, children }: { marca: Marca; t
         <div>
           <div style={label}>Inteligencia de contenido</div>
           <div style={{ fontSize: '12px', color: T.muted, marginTop: '6px' }}>
-            {data.fuentes.filter((f: any) => f.activa).length} fuentes activas · {data.reels.length} reels en ranking · se actualiza solo cada lunes 07:00
+            {data.fuentes.filter((f: any) => f.activa).length} fuentes activas
+            {' '}({data.fuentes.filter((f: any) => f.activa && f.origen === 'auto').length} descubiertas solas)
+            {' '}· {data.reels.length} reels en ranking · se actualiza solo cada lunes 07:00
           </div>
         </div>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -121,17 +123,22 @@ export default function IntelPanel({ marca, theme, children }: { marca: Marca; t
         <div>
           <div style={{ display: 'flex', gap: '8px', marginBottom: '24px' }}>
             <select value={nuevaTipo} onChange={e => setNuevaTipo(e.target.value as any)} style={{ width: '130px' }}>
-              <option value='cuenta'>Cuenta</option>
+              <option value='zona'>Zona</option>
               <option value='hashtag'>Hashtag</option>
+              <option value='cuenta'>Cuenta</option>
             </select>
             <input value={nuevaValor} onChange={e => setNuevaValor(e.target.value)} onKeyDown={e => e.key === 'Enter' && addFuente()}
-              placeholder={nuevaTipo === 'cuenta' ? '@competidor o URL del perfil' : '#marbellarealestate'} />
+              placeholder={nuevaTipo === 'zona' ? 'Marbella, Costa del Sol…' : nuevaTipo === 'cuenta' ? '@competidor o URL del perfil' : '#marbellarealestate'} />
             <button onClick={addFuente} style={btn}>Añadir</button>
+          </div>
+          <div style={{ fontSize: '11px', color: T.muted, marginTop: '-14px', marginBottom: '20px' }}>
+            Con una zona u hashtag no necesitas buscar competidores: el sistema rastrea el sector ahí y añade solo (marcadas <span style={{ color: T.accent }}>auto</span>) las cuentas con reels de más impacto que encuentre.
           </div>
           {data.fuentes.map((f: any) => (
             <div key={f.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${T.border}`, padding: '12px 0', opacity: f.activa ? 1 : 0.45 }}>
               <div>
-                <span style={{ color: T.cream, fontSize: '13px' }}>{f.tipo === 'cuenta' ? '@' : '#'}{f.valor}</span>
+                <span style={{ color: T.cream, fontSize: '13px' }}>{f.tipo === 'cuenta' ? '@' : f.tipo === 'hashtag' ? '#' : '📍'}{f.valor}</span>
+                {f.origen === 'auto' && <span style={{ color: T.accent, fontSize: '10px', marginLeft: '8px', letterSpacing: '0.1em', textTransform: 'uppercase' as const }}>auto</span>}
                 <span style={{ color: T.muted, fontSize: '11px', marginLeft: '12px' }}>
                   {f.ultimo_scrape ? `último scrape ${new Date(f.ultimo_scrape).toLocaleDateString('es-ES')}` : 'sin scrapear'}
                 </span>
@@ -142,7 +149,7 @@ export default function IntelPanel({ marca, theme, children }: { marca: Marca; t
               </div>
             </div>
           ))}
-          {!data.fuentes.length && <div style={{ color: T.muted, fontSize: '13px', padding: '32px 0', textAlign: 'center' }}>Añade cuentas de competidores o hashtags del sector para empezar.</div>}
+          {!data.fuentes.length && <div style={{ color: T.muted, fontSize: '13px', padding: '32px 0', textAlign: 'center' }}>Añade una zona (ej. "Marbella") o un hashtag del sector para que el sistema empiece a descubrir reels y cuentas por sí mismo.</div>}
         </div>
       )}
 

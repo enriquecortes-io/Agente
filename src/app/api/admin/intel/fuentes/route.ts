@@ -3,13 +3,14 @@ import { getSupabase } from '../../../../../tools/reelIntelTools.js';
 export const dynamic = 'force-dynamic';
 const json = (d: any, status = 200) => new Response(JSON.stringify(d), { status, headers: { 'Content-Type': 'application/json' } });
 
-// POST { marca, tipo: 'cuenta'|'hashtag', valor }
+// POST { marca, tipo: 'cuenta'|'hashtag'|'zona', valor }
 export async function POST(req: Request) {
   const { marca, tipo, valor } = await req.json();
   const limpio = String(valor || '').trim().replace(/^[@#]/, '').replace(/^https?:\/\/(www\.)?instagram\.com\//, '').replace(/\/.*$/, '').toLowerCase();
-  if (!limpio || !['cuenta', 'hashtag'].includes(tipo)) return json({ error: 'Datos no válidos' }, 400);
+  if (!limpio || !['cuenta', 'hashtag', 'zona'].includes(tipo)) return json({ error: 'Datos no válidos' }, 400);
+  // Añadida a mano: aunque ya existiera como hallazgo automático, queda promovida a 'manual'.
   const { data, error } = await getSupabase().from('ig_fuentes')
-    .upsert({ marca, tipo, valor: limpio, activa: true }, { onConflict: 'marca,tipo,valor' }).select().single();
+    .upsert({ marca, tipo, valor: limpio, activa: true, origen: 'manual' }, { onConflict: 'marca,tipo,valor' }).select().single();
   if (error) return json({ error: error.message }, 500);
   return json({ fuente: data });
 }
