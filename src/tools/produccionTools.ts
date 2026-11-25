@@ -300,6 +300,7 @@ Material disponible de la propiedad (índice: [estancia · tipo · momento · ca
 ${listado}
 
 Reglas:
+- Sé breve en los textos: una respuesta larga se corta y se pierde entera.
 - Usa el índice del material, nunca inventes uno que no esté en la lista.
 - El plano de apertura necesita el material de más impacto (calidad 5).
 - No repitas el mismo material en dos planos salvo que no haya alternativa.
@@ -315,12 +316,12 @@ Devuelve JSON:
     "movimiento": "push-in | push-out | paneo izquierda | paneo derecha | estático",
     "texto_pantalla": "texto exacto a superponer, o null",
     "voz": "texto exacto a narrar, o null",
-    "motivo": "por qué este material encaja en este plano"
+    "motivo": "máximo 10 palabras"
   }],
   "falta": ["qué material haría falta y no existe"],
   "portada": 12
 }`,
-    5000,
+    8000,
   );
 
   const plan = parseJSON<any>(salida);
